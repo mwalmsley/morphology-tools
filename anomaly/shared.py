@@ -1,6 +1,7 @@
 import os
 import random
 import logging
+import json
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -153,7 +154,9 @@ def load_gz2_data(method, anomalies, max_galaxies):
     assert anomalies == 'odd'
 
     if method == 'ellipse':
-        feature_df = pd.read_parquet('gz2_kaggle_ellipse_features.parquet')  # galaxy_zoo_example.py applied to full kaggle dataset
+        feature_loc = 'anomaly/data/EllipseFitFeatures_output_back_10_12.parquet'  # michelle's version, used in the paper
+        # feature_loc = 'anomaly/data/gz2_kaggle_ellipse_features.parquet'  # my version which uses the exact same example script, but is nonetheless quite different
+        feature_df = pd.read_parquet(feature_loc)  # galaxy_zoo_example.py applied to full kaggle dataset
         feature_cols = feature_df.columns.values
         feature_df['objid'] = feature_df.index.astype(str)
         feature_df = feature_df.reset_index(drop=True)
@@ -382,3 +385,27 @@ def save_top_galaxies(preds, metadata, save_loc):
         ax.axis('off')
     fig.tight_layout()
     fig.savefig(save_loc, transparent=True)
+
+
+def get_metrics_like_fig_5(final_sorted_labels, method, dataset_name, regression, experiment_name):
+    top_n_galaxies = list(range(1, 501))  # "N" on x axis is not the num. of labels but the num. of galaxies to consider (from RWS formula)
+    rank_weighted_scores = [get_rank_weighted_score(final_sorted_labels, n=top_n) for top_n in top_n_galaxies]
+    fig5_metrics = {
+        'top_n_galaxies': top_n_galaxies,
+        'rank_weighted_scores': rank_weighted_scores,
+        'method': method,
+        'regression': regression
+    }
+
+    with open('anomaly/results/{}/paper_style/fig5_metrics_{}_{}.json'.format(dataset_name, regression, experiment_name), 'w') as f:
+        json.dump(fig5_metrics, f)
+
+        plt.plot(fig5_metrics['top_n_galaxies'], fig5_metrics['rank_weighted_scores'], label=regression)
+        plt.xlabel('N galaxies for Rank Weighted Score')
+        plt.ylabel('Rank Weighted Score')
+        # plt.show()
+        plt.xlim([0., 500.])
+        plt.ylim([0., 1.])
+        plt.tight_layout()
+        plt.legend()
+        plt.savefig('anomaly/results/{}/paper_style/fig5_metrics_{}_{}.png'.format(dataset_name, regression, experiment_name))

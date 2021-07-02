@@ -1,5 +1,6 @@
 import random
 import logging
+import json
 
 import numpy as np
 import pandas as pd
@@ -49,18 +50,19 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
 
 def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_size=10, retrain_batches=29):
 
-    # max_galaxies = 60714
-    max_galaxies = 40672  # featured, face-on, good ellipse measurement
+    # max_galaxies = 1000
+    max_galaxies = 60714
+    # max_galaxies = 40672  # featured, face-on, good ellipse measurement
     # 40921 in decals/cnn/irregular after cuts, 40672 with ellipses due to nans (same morph. cuts)
-    dataset_name='decals'
-    # dataset_name ='gz2'
+    # dataset_name='decals'
+    dataset_name ='gz2'
 
-    # method = 'ellipse'
-    method = 'cnn'
+    method = 'ellipse'
+    # method = 'cnn'
 
     # anomalies = 'mergers'
-    anomalies = 'featured'
-    # anomalies = 'odd'
+    # anomalies = 'featured'
+    anomalies = 'odd'
     # anomalies = 'rings'
     # anomalies = 'ring_responses'
     # anomalies = 'irregular'
@@ -82,7 +84,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
     if method == 'cnn':
         print('Applying PCA for embedding')
-        save = 'comparison/figures/{}/gp_pca_variation.png'.format(dataset_name)
+        save = 'anomaly/figures/{}/gp_pca_variation.png'.format(dataset_name)
         # save = ''
         embed = shared.get_embed(features, n_components=n_components, save=save)
     else:
@@ -91,10 +93,10 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
     embed_subset, responses_subset, labels_subset = embed[:5000], responses[:5000], labels[:5000]
     sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(labels_subset), alpha=.3)
-    plt.savefig('comparison/figures/{}/simulated_embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
+    plt.savefig('anomaly/figures/{}/simulated_embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
     plt.close()
     sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(responses_subset), alpha=.3)
-    plt.savefig('comparison/figures/{}/simulated_embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
+    plt.savefig('anomaly/figures/{}/simulated_embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
     plt.close()
 
     all_metrics = []
@@ -200,6 +202,15 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             # print(metrics['labelled_samples'], metrics['accuracy_50'])
             all_metrics.append(metrics)
 
+
+            # special metrics for fig 5 in astronomaly paper
+            if (dataset_name == 'gz2') and (labelled_samples == 200):
+                print('Calculating fig 5 metrics')
+                sorted_labels = labels[np.argsort(preds)][::-1]
+
+                experiment_name = 'ellipse_loch_{}_{}'.format(np.random.randint(10000), iteration_n)
+                shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
+
             if batch_n == retrain_batches - 1:
 
                 # embed_subset, responses_subset, labels_subset, preds_subset = embed[:5000], responses[:5000], labels[:5000], preds[:5000]
@@ -208,7 +219,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 ax.scatter(embed[:, 0], embed[:, 1], alpha=.06, s=1.)
                 ax.axis('off')
                 fig.tight_layout()
-                fig.savefig('comparison/figures/{}/embed_first_2_components_dist_{}.png'.format(dataset_name, anomalies))
+                fig.savefig('anomaly/figures/{}/embed_first_2_components_dist_{}.png'.format(dataset_name, anomalies))
                 plt.close()
                 # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(preds_subset), alpha=.3)
                 fig, ax = plt.subplots()
@@ -217,7 +228,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 ax.scatter(embed[:, 0], embed[:, 1], c=(np.clip(preds, 1., 3.)-1)/2., alpha=.06, s=1)
                 ax.axis('off')
                 fig.tight_layout()
-                fig.savefig('comparison/figures/{}/embed_first_2_components_final_preds_{}.png'.format(dataset_name, anomalies))
+                fig.savefig('anomaly/figures/{}/embed_first_2_components_final_preds_{}.png'.format(dataset_name, anomalies))
                 plt.close()
 
 
@@ -240,14 +251,14 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 
 
-    df_loc = '/home/walml/repos/astronomaly/comparison/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
+    df_loc = 'anomaly/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
     df = pd.DataFrame(data=all_metrics)
     df.to_csv(df_loc, index=False)
 
-    df_loc = '/home/walml/repos/astronomaly/comparison/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
+    df_loc = 'anomaly/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
     df = pd.read_csv(df_loc)
 
-    save_loc =  '/home/walml/repos/astronomaly/comparison/results/{}/gp_metrics_total{}_batch{}_d{}_it{}_{}_{}.png'.format(
+    save_loc =  'anomaly/results/{}/gp_metrics_total{}_batch{}_d{}_it{}_{}_{}.png'.format(
         dataset_name,
         len(labels),  # num galaxies
         retrain_size,
@@ -261,4 +272,4 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 if __name__ == '__main__':
 
-    benchmark_gp(n_iterations=1, n_components=10)
+    benchmark_gp(n_iterations=10, n_components=10)
