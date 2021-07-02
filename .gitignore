@@ -131,3 +131,10 @@ dmypy.json
 *.pickle
 *.png
 *.csv
+*.parquet
+*.jpeg
+*.jpg
+*.zip
+*.json
+
+old_checkpoints
