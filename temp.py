@@ -82,8 +82,12 @@ if __name__ == '__main__':
     # scratch = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_lochner_active_old_distances_repeat*.json')]
     scratch = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_lochner_active_old_distances_repeat*scaled*.json')]
     gp_ellipse = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_latest_ellipse_loch_repeat*.json')]
-    gp_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_latest_cnn_repeat*.json')]
-    forest_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_latest_cnn_repeat*.json')]
+    # gp_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_latest_cnn_repeat*.json')]
+    if_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_IF_repeat*.json')]
+    # random_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_repeat*.json')]
+    random_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_scaled_repeat*.json')]
+    # gp_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_maxunc_repeat*.json')]
+    # forest_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_latest_cnn_repeat*.json')]
 
     assert original
     assert updated
@@ -97,7 +101,7 @@ if __name__ == '__main__':
     print(len(scratch))
 
     # [(original, 'oct-20 main', 'xkcd:mid blue'), (updated, 'latest main', 'xkcd:soft green'), (gz2, 'latest gz2', 'xkcd:purple pink'), (scratch, 'Scratch', 'black')]:
-    for (experiment, label, color) in [(gp_ellipse, 'gp-ellipse', 'xkcd:mid blue'), (gp_cnn, 'gp-cnn', 'xkcd:purple pink'), (forest_cnn, 'if-cnn', 'xkcd:soft green'), (scratch, 'if-ellipse', 'black')]:
+    for (experiment, label, color) in [(gp_ellipse, 'gp-ellipse', 'xkcd:mid blue'), (random_cnn, 'rand-cnn', 'xkcd:purple pink'), (if_cnn, 'if-cnn', 'xkcd:soft green'), (scratch, 'if-ellipse', 'black')]:
         for run in experiment:
             plt.plot(run['top_n_galaxies'], run['rank_weighted_scores'], alpha=.2, color=color)
         mean_scores = np.mean(np.array([run['rank_weighted_scores'] for run in experiment]), axis=0)

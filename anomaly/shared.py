@@ -2,6 +2,7 @@ import os
 import random
 import logging
 import json
+import pickle
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -250,14 +251,25 @@ def load_raw_data():
     return features, labels
 
 
-def get_embed(features, n_components, save=''):
-    embedder = IncrementalPCA(n_components=n_components)
-    embed = embedder.fit_transform(features) 
-     # no train/test needed as unsupervised
-    if len(save) > 0:
-        plt.plot(embedder.explained_variance_)  # 5 would probably do?
-        plt.savefig(save)
-        plt.close()
+def get_embed(features, n_components, save_embed='', save_variance='', new=True):
+
+    if new:
+        embedder = IncrementalPCA(n_components=n_components)
+        embed = embedder.fit_transform(features) 
+
+        if len(save_embed) > 0:
+            with open(save_embed, 'wb') as f:
+                pickle.dump(embed, f)
+        # no train/test needed as unsupervised
+        if len(save_variance) > 0:
+            plt.plot(embedder.explained_variance_)  # 5 would probably do?
+            plt.savefig(save_variance)
+            plt.close()
+    else:
+        raise NotImplementedError # needs care due to shuffling, except GZ2
+        assert os.path.isfile(save_embed)
+        with open(save_embed, 'rb') as f:
+            embed = pickle.load(f)
     return embed
 
 

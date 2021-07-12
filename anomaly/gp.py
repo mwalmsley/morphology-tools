@@ -12,9 +12,11 @@ from PIL import Image
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import explained_variance_score
+from sklearn.ensemble import IsolationForest
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import DotProduct, WhiteKernel, RBF, Matern, RationalQuadratic
+from sklearn.preprocessing import StandardScaler
 
 from modAL.models import ActiveLearner, BayesianOptimizer
 # from modAL.models import CommitteeRegressor
@@ -24,8 +26,9 @@ from modAL.acquisition import max_EI
 import shared
 
 
-def teach_optimizer(optimizer, X_pool, y_pool, retrain_size):
-    query_indices, _ = optimizer.query(X_pool, n_instances=retrain_size)
+def teach_optimizer(optimizer, X_pool, y_pool, retrain_size, query_indices=None):
+    if query_indices is None:  # otherwise, override with provided indices
+        query_indices, _ = optimizer.query(X_pool, n_instances=retrain_size)
     X_acquired = X_pool[query_indices]
     y_acquired = y_pool[query_indices]
     optimizer.teach(X_acquired, y_acquired)  # bootstrap=True
@@ -84,26 +87,36 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
     if method == 'cnn':
         print('Applying PCA for embedding')
-        save = 'anomaly/figures/{}/gp_pca_variation.png'.format(dataset_name)
-        # save = ''
-        embed = shared.get_embed(features, n_components=n_components, save=save)
+        save_variance = 'anomaly/figures/{}/gp_pca_variation.png'.format(dataset_name)
+        save_embed = 'anomaly/data/latest_embed.pickle'
+        new_embed = True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
+        embed = shared.get_embed(features, n_components=n_components, save_variance=save_variance, save_embed=save_embed, new=new_embed)
+        logging.info('Applying zero mean unit variance transform to embed')
+        # for ellipses only, apply sklearn StandardScalar i.e. zero mean unit variance transform as per astronomaly
+        scl = StandardScaler()
+        embed = scl.fit_transform(embed)
+
     else:
         embed = features
     del features # TODO being lazy
 
     embed_subset, responses_subset, labels_subset = embed[:5000], responses[:5000], labels[:5000]
     sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(labels_subset), alpha=.3)
-    plt.savefig('anomaly/figures/{}/simulated_embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
+    plt.savefig('anomaly/figures/{}/embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
     plt.close()
     sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(responses_subset), alpha=.3)
-    plt.savefig('anomaly/figures/{}/simulated_embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
+    plt.savefig('anomaly/figures/{}/embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
     plt.close()
 
     all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
 
+        # without the reshuffle of the data and reshuffle of the starting 10, exactly the same galaxies are selected and the variation is completely gone
+        # (all failed in fact)
+        # with only the reshuffle of the starting 10, the variation is present as normal - so the variation between runs really is the start and not the data shuffle itself
+
         shuffle_indices = np.arange(len(labels))
-        random.shuffle(shuffle_indices)  # inplace
+        # random.shuffle(shuffle_indices)  # inplace
         embed = embed[shuffle_indices]
         labels = labels[shuffle_indices]
         responses = responses[shuffle_indices]
@@ -137,23 +150,18 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         # kernel = RBF() + WhiteKernel()  # or matern
         kernel = RationalQuadratic() + WhiteKernel()  # or matern
         gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(X_pool[:1000], y_pool[:1000])
-        # print(gp.score(X_test, y_test))
-
-        # kernel = RBF() + WhiteKernel()  # or matern
-        # gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(X_pool[:1000], y_pool[:1000])
-        # print(gp.score(X_test, y_test))
+        # gp.fit(embed[:1000], responses[:1000])
+        # print(gp.score(embed[-1000:], responses[-1000:]))
 
         # kernel = Matern(nu=1.5) + WhiteKernel()  # or matern
         # gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(X_pool[:1000], y_pool[:1000])
-        # print(gp.score(X_test, y_test))
+        # gp.fit(embed[:1000], responses[:1000])
+        # print(gp.score(embed[-1000:], responses[-1000:]))
 
         # kernel = Matern(nu=2.5) + WhiteKernel()  # or matern
         # gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(X_pool[:1000], y_pool[:1000])
-        # print(gp.score(X_test, y_test))
+        # gp.fit(embed[:1000], responses[:1000])
+        # print(gp.score(embed[-1000:], responses[-1000:]))
 
         # exit()
 
@@ -176,16 +184,34 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
         acquired_samples = []
         for batch_n in range(retrain_batches):
-            # TODO possibly enforce a hypercube or similarly spread first selection
+            # TODO possibly enforce a hypercube or similarly spread first selection, or perhaps cluster, or...
             # if (batch_n < 5) or (batch_n % 2 == 0):  # if early or even batch_n
             #     # print('explore')
             #     learner.query_strategy = max_uncertainty_query_strategy
             # else:
             #     # print('exploit')
             #     learner.query_strategy = max_value_query_strategy
+
+            if batch_n == 0:
+                # # use isolationforest to pick the first retrain_size starting examples
+                # unsupervised_estimator = IsolationForest(n_estimators=100, contamination='auto')
+                # unsupervised_estimator.fit(embed)
+                # # lower decision function = more abnormal
+                # all_scores = -1 * unsupervised_estimator.decision_function(embed)
+                # query_indices = np.argsort(all_scores)[:retrain_size]
+
+                # the same random every iteration, and for gz2 possibly not random unless preshuffled
+                # query_indices = np.arange(retrain_size)  
+
+                # random 10 every time, regardless of dataset overall shuffle
+                query_indices = np.arange(len(embed))
+                random.shuffle(query_indices)
+                query_indices = query_indices[:retrain_size]
+            else:
+                query_indices = None
             
 
-            X_acquired, _ = teach_optimizer(learner, embed, responses, retrain_size)  # trained on responses TODO
+            X_acquired, _ = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices)  # trained on responses TODO
             acquired_samples.append(X_acquired)  # viz and count only
             labelled_samples = (1 + batch_n) * retrain_size
             # print('Labelled samples: {}'.format(labelled_samples))
@@ -208,7 +234,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 print('Calculating fig 5 metrics')
                 sorted_labels = labels[np.argsort(preds)][::-1]
 
-                experiment_name = 'latest_cnn_repeat{}'.format(iteration_n)
+                experiment_name = 'cnn_random_staticdata_random10_{}'.format(iteration_n)
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
             if batch_n == retrain_batches - 1:
@@ -217,18 +243,22 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
                 fig, ax = plt.subplots()
                 ax.scatter(embed[:, 0], embed[:, 1], alpha=.06, s=1.)
-                ax.axis('off')
+                ax.set_xlim([-2, 4.2])
+                ax.set_ylim([-3, 2])
+                # ax.axis('off')
                 fig.tight_layout()
-                fig.savefig('anomaly/figures/{}/embed_first_2_components_dist_{}.png'.format(dataset_name, anomalies))
+                fig.savefig('anomaly/figures/{}/embed_first_2_components_dist_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
                 plt.close()
                 # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(preds_subset), alpha=.3)
                 fig, ax = plt.subplots()
-                print(preds[:30])
+
                 # print((np.clip(preds, 1., 3.)-1)/2.)
                 ax.scatter(embed[:, 0], embed[:, 1], c=(np.clip(preds, 1., 3.)-1)/2., alpha=.06, s=1)
-                ax.axis('off')
+                ax.set_xlim([-2, 4.2])
+                ax.set_ylim([-3, 2])
+                # ax.axis('off')
                 fig.tight_layout()
-                fig.savefig('anomaly/figures/{}/embed_first_2_components_final_preds_{}.png'.format(dataset_name, anomalies))
+                fig.savefig('anomaly/figures/{}/embed_first_2_components_final_preds_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
                 plt.close()
 
 
@@ -236,18 +266,19 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 #     save_loc = '/home/walml/repos/astronomaly/comparison/results/{}/top_12_galaxies_it{}.png'.format(dataset_name, iteration_n)
                 #     shared.save_top_galaxies(preds, metadata, save_loc)
 
-
-        ## only useful for d = 5 and below
-        # acquired_samples = np.stack(acquired_samples, axis=0)  # batch, row, feature
-        # fig, ax = plt.subplots()
-        # reshaped_samples = acquired_samples.reshape((acquired_samples.shape[0] * acquired_samples.shape[1], acquired_samples.shape[2]))
-        # colors = np.concatenate([np.ones(retrain_size) * n / retrain_batches for n in range(retrain_batches)])
-        # ax.scatter(reshaped_samples[:, 0], reshaped_samples[:, 1], c=colors, alpha=.5, marker='+')
-        # ax.set_xlim([-8, 8])
-        # ax.set_ylim([-8, 8])
-        # # fig.colorbar()
-        # fig.tight_layout()
-        # fig.savefig('acquired_points_gp_{}.png'.format(iteration_n))
+                acquired_samples = np.stack(acquired_samples, axis=0)  # batch, row, feature
+                fig, ax = plt.subplots()
+                # reshape to (row, feature) i.e. drop batch dimension
+                reshaped_samples = acquired_samples.reshape((acquired_samples.shape[0] * acquired_samples.shape[1], acquired_samples.shape[2]))
+                # color first batch by 1, second by...etc
+                colors = np.concatenate([np.ones(retrain_size) * n / retrain_batches for n in range(retrain_batches)])
+                ax.scatter(reshaped_samples[:, 0], reshaped_samples[:, 1], c=colors, alpha=.5, marker='+')
+                ax.set_xlim([-2, 4.2])
+                ax.set_ylim([-3, 2])
+                # fig.colorbar()
+                fig.tight_layout()
+                # purple is early, yellow is late
+                fig.savefig('anomaly/figures/{}/acquired_points_gp_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
 
 
 
