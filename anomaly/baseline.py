@@ -49,14 +49,14 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
     # max_galaxies = 1000
     # max_galaxies = 10000
-    max_galaxies = 60714  # 61578 gz2 kaggle galaxies, a few with nan ellipse features (1 extra nan with my ellipse features)
+    max_galaxies = 60715  # 61578 gz2 kaggle galaxies, a few with nan ellipse features (1 extra nan with my ellipse features)
     # max_galaxies = 40672
 
     dataset_name = 'gz2'
     # dataset_name = 'decals'
 
-    method = 'ellipse'
-    # method = 'cnn'
+    # method = 'ellipse'
+    method = 'cnn'
 
     # anomalies = 'mergers'
     # anomalies = 'rings'
@@ -85,8 +85,6 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
         print('Applying PCA for embedding')
         features = shared.get_embed(features, n_components=10, save='')  # optionally compress first with PCA
 
-    #human_loop_learning.py:195
-    regressor = RandomForestRegressor(n_estimators=100)
 
     if dataset_name == 'simulated':
         unsupervised_estimator = LocalOutlierFactor(n_neighbors=100, contamination='auto', novelty=False)
@@ -102,14 +100,17 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
     # sort by isolation forest prediction
     rescaled_scores = human_loop_learning.rescale_array(all_scores, new_min=0., new_max=5., convert_integer=False)
+
+    # print(metadata.columns.values)
+    # score_df = pd.DataFrame(data={'rescaled_scores': rescaled_scores, 'all_scores': all_scores, 'objid': metadata['objid']})
+    # score_df.to_csv('temp_score_df.csv', index=False)
+
+
     score_indices = np.argsort(rescaled_scores)[::-1]  # high to low
 
     forest_sorted_X = features[score_indices]
     forest_sorted_responses = responses[score_indices]
     forest_sorted_anomaly_preds = rescaled_scores[score_indices]
-    # very very skewed towards nearly everything being normal
-    print(forest_sorted_anomaly_preds.min(), forest_sorted_anomaly_preds.mean(), forest_sorted_anomaly_preds.max())
-    print(np.mean(forest_sorted_anomaly_preds > 2))
 
     # shared.visualise_predictions_in_first_two_dims(sorted_X, anomaly_preds, 'comparison/figures/anomaly_preds.png')
     # shared.visualise_predictions_in_first_two_dims(sorted_X, sorted_labels, 'comparison/figures/true_labels.png')
@@ -131,6 +132,7 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
             regressor_y = np.concatenate([regressor_y, forest_sorted_responses[slice_to_label]], axis=0)
 
         # update regressor
+        regressor = RandomForestRegressor(n_estimators=100)  # redefine just in case
         regressor.fit(regressor_X, regressor_y.squeeze())
         regressor_preds = regressor.predict(forest_sorted_X)
         
@@ -146,7 +148,6 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
         forest_sorted_labels = labels[score_indices]  # simply to make sure they start off with the same indices as joint preds (i.e. forest-prioritised)
         active_weighted_sorted_labels = forest_sorted_labels[np.argsort(joint_preds)[::-1]]
 
-
         metrics = shared.get_metrics(joint_preds, active_weighted_sorted_labels)  # no test set, applied on everything
         metrics['labelled_samples'] = labelled_samples
         metrics['random_state'] = 0
@@ -154,9 +155,18 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
         # special metrics for fig 5 in astronomaly paper
         if (dataset_name == 'gz2') and (labelled_samples == 200):
+            
+            print('Human scores at N = 200: ', pd.value_counts(regressor_y))
+            
             print('Calculating fig 5 metrics')
-            experiment_name = 'mine_noactive'
+
+            experiment_name = 'latest_cnn_repeat5'
             shared.get_metrics_like_fig_5(active_weighted_sorted_labels, method, dataset_name, 'forest', experiment_name)
+
+            # active_df = pd.DataFrame(data={'rescaled_scores': rescaled_scores[score_indices], 'all_scores': all_scores[score_indices], 'objid': metadata['objid'].values[score_indices], 'joint_preds': joint_preds, 'labels': labels[score_indices], 'active_weighted_sorted_labels': active_weighted_sorted_labels})
+            # active_df.to_csv('temp_active_df.csv', index=False)
+            exit()
+
 
         all_metrics.append(metrics)
 

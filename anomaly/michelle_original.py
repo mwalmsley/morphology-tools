@@ -10,15 +10,19 @@ import os
 import pandas as pd
 import numpy as np
 
-# Root directory for data
-# data_dir = os.path.join(os.path.sep, 'home', 'michelle', 'BigData', 
-#                         'Anomaly', '')
+"""
+Root directory for data
+data_dir = os.path.join(os.path.sep, 'home', 'michelle', 'BigData', 
+                        'Anomaly', '')
+"""
 data_dir = os.path.join('/home/walml/repos/morphology-tools/anomaly')
 
 # Where the galaxy zoo images are
-# image_dir = os.path.join(data_dir, 'GalaxyZoo', 
-#                          'galaxy-zoo-the-galaxy-challenge', 
-#                          'images_training_rev1', '')
+"""
+image_dir = os.path.join(data_dir, 'GalaxyZoo', 
+                         'galaxy-zoo-the-galaxy-challenge', 
+                         'images_training_rev1', '')
+"""
 image_dir = os.path.join(data_dir, 'data', 'images_training_rev1')
 
 # Where output should be stored
@@ -44,16 +48,17 @@ display_transform_function = [
 # For galaxy zoo, we're lucky enough to have some actual human labelled data
 # that we use to illustrate the human-in-the-loop learning instead of having 
 # to label manually
-# df = pd.read_csv(os.path.join(data_dir, 'GalaxyZoo', 
-#                               'galaxy-zoo-the-galaxy-challenge', 
-#                               'training_solutions_rev1.csv'),
-#                  index_col=0)
+"""
+df = pd.read_csv(os.path.join(data_dir, 'GalaxyZoo', 
+                            'galaxy-zoo-the-galaxy-challenge', 
+                            'training_solutions_rev1.csv'),
+                index_col=0)
+"""
 df = pd.read_csv(
     '/media/walml/beta1/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv',
     index_col=0)
 df.index = df.index.astype(str)
 additional_metadata = df[['Class6.1']]
-
 
 
 def run_pipeline():
@@ -94,30 +99,32 @@ def run_pipeline():
     # Creates a pipeline object for feature extraction
     pipeline_ellipse = shape_features.EllipseFitFeatures(
         percentiles=[90, 80, 70, 60, 50, 0],
-        output_dir=output_dir, channel=0, force_rerun=False, 
+        output_dir=output_dir, channel=0, force_rerun=True, 
         central_contour=False)
 
     # Actually runs the feature extraction
     
-    # features = pipeline_ellipse.run_on_dataset(image_dataset)
+    """
+    ## features = pipeline_ellipse.run_on_dataset(image_dataset)
     # features = pd.read_parquet(output_dir+'EllipseFitFeatures_output.parquet')
+    """
     features = pd.read_parquet('anomaly/data/EllipseFitFeatures_output_back_10_12.parquet')
 
     # Now we rescale the features using the same procedure of first creating
     # the pipeline object, then running it on the feature set
-    pipeline_scaler = scaling.FeatureScaler(force_rerun=False,
+    pipeline_scaler = scaling.FeatureScaler(force_rerun=True,
                                             output_dir=output_dir)
     features = pipeline_scaler.run(features)
 
     # The actual anomaly detection is called in the same way by creating an
     # Iforest pipeline object then running it
     pipeline_iforest = isolation_forest.IforestAlgorithm(
-        force_rerun=False, output_dir=output_dir)
+        force_rerun=True, output_dir=output_dir)
     anomalies = pipeline_iforest.run(features)
 
     # We convert the scores onto a range of 0-5
     pipeline_score_converter = human_loop_learning.ScoreConverter(
-        force_rerun=False, output_dir=output_dir)
+        force_rerun=True, output_dir=output_dir)
     anomalies = pipeline_score_converter.run(anomalies)
 
     # This is unique to galaxy zoo which has labelled data. We first sort the
@@ -151,7 +158,7 @@ def run_pipeline():
     # This is the active learning object that will be run on demand by the
     # frontend 
     pipeline_active_learning = human_loop_learning.NeighbourScore(
-        alpha=1, output_dir=output_dir)
+        alpha=1, output_dir=output_dir, force_rerun=True)
 
     # We use TSNE for visualisation which is run in the same way as other parts
     # of the pipeline.
@@ -160,12 +167,13 @@ def run_pipeline():
                                                 anomaly_column='score',
                                                 N_anomalies=20,
                                                 N_total=2000)
-
+    """
     # pipeline_tsne = tsne.TSNE_Plot(
-    #     force_rerun=False,
+    #     force_rerun=True,
     #     output_dir=output_dir,
     #     perplexity=100)
     # t_plot = pipeline_tsne.run(features_to_plot)
+    """
     t_plot = None  # no need here
 
     # The run_pipeline function must return a dictionary with these keywords
@@ -178,6 +186,7 @@ def run_pipeline():
 
 results = run_pipeline()
 
+# my stuff below
 
 anomaly_scores = results['anomaly_scores']  # sorted by most to least anomalous
 features = results['features']  # not sorted
@@ -192,13 +201,16 @@ trained_score_df = results['active_learning']._execute_function(features_and_lab
 print(trained_score_df.head())
 
 result_df = pd.merge(trained_score_df, anomaly_scores, how='inner', left_index=True, right_index=True)
-additional_metadata['is_anomaly'] = additional_metadata['Class6.1'] >= 0.9
+additional_metadata['is_anomaly'] = additional_metadata['Class6.1'] > 0.9  # > not >= removes 3 anomlies (924 vs 927)
 print(additional_metadata['is_anomaly'].value_counts())
 result_df = pd.merge(result_df, additional_metadata[['is_anomaly']], how='inner', left_index=True, right_index=True)
 
-result_df.to_csv('temp_d1b57d82.csv')
+name = 'original_65579fb_repeat4_gp9'  
+result_df.to_csv('{}.csv'.format(name))
 
 final_sorted_labels = result_df['is_anomaly'][np.argsort(result_df['trained_score'])[::-1]]
 
 import shared
-shared.get_metrics_like_fig_5(final_sorted_labels, method='original', dataset_name='gz2', regression='forest', experiment_name='replication_d1b57d82')
+shared.get_metrics_like_fig_5(final_sorted_labels, method='original', dataset_name='gz2', regression='forest', experiment_name=name)
+
+# matches the paper perfectly at commit 65579fb (oct 17 2020) and at d1b57d82 (latest main, basically)

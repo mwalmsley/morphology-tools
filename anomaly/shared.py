@@ -14,6 +14,7 @@ import tqdm
 
 from sklearn.metrics import recall_score
 from sklearn.decomposition import IncrementalPCA
+from sklearn.preprocessing import StandardScaler
 
 
 def load_decals_data(method, anomalies, max_galaxies=None):
@@ -159,8 +160,11 @@ def load_gz2_data(method, anomalies, max_galaxies):
         feature_df = pd.read_parquet(feature_loc)  # galaxy_zoo_example.py applied to full kaggle dataset
         feature_cols = feature_df.columns.values
         feature_df['objid'] = feature_df.index.astype(str)
+
+        logging.info('All features: {}'.format(len(feature_df)))
+        feature_df = feature_df.dropna(how='any')  # some features are nan
+        logging.info('Non-nan features: {}'.format(len(feature_df)))
         feature_df = feature_df.reset_index(drop=True)
-        print(feature_df.head())
 
         label_df = pd.read_csv('/media/walml/beta1/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv')  # from kaggle
         label_df['objid'] = label_df['GalaxyID'].astype(str)
@@ -170,14 +174,8 @@ def load_gz2_data(method, anomalies, max_galaxies):
         assert len(feature_df) == len(df)
 
         df['t06_odd_a14_yes_fraction'] = df['Class6.1']
-        df = df.dropna(subset=feature_cols, how='any')  # some features are nan
 
-        # need to take care as some will be nan
-        # valid_features = ~np.isnan(features).any(axis=1)  # important ~
-        # print('Dropping {} of {} galaxies for bad features'.format((valid_features == 0).sum(), len(features)))
-        # features = features[valid_features]
-        # df = df[valid_features]
-
+        
 
     elif method == 'cnn':
         features = pd.read_parquet('/media/walml/beta1/cnn_features/gz2/cnn_features_concat.parquet')  # features and png_loc
@@ -195,12 +193,18 @@ def load_gz2_data(method, anomalies, max_galaxies):
         features = df[feature_cols].values  # not yet pca'd, for now - may cache instead
 
     if max_galaxies is not None:
-        print('Sampling {} galaxies from {} total'.format(max_galaxies, len(df)))
+        logging.info('Sampling {} galaxies from {} total'.format(max_galaxies, len(df)))
         df = df.sample(max_galaxies)
 
     responses = np.around(np.array(df['t06_odd_a14_yes_fraction'] * 5))  # integer responses "from" UI
     labels = np.array(df['t06_odd_a14_yes_fraction'] > 0.9)  # conservative scoring following astronomaly paper
     features = df[feature_cols].values
+
+    if method == 'ellipse':
+        logging.info('Applying zero mean unit variance transform to ellipse features')
+        # for ellipses only, apply sklearn StandardScalar i.e. zero mean unit variance transform as per astronomaly
+        scl = StandardScaler()
+        features = scl.fit_transform(features)
 
     assert len(features) == len(labels)
     return features, labels, responses, df

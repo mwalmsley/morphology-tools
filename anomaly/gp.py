@@ -51,14 +51,14 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
 def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_size=10, retrain_batches=29):
 
     # max_galaxies = 1000
-    max_galaxies = 60714
+    max_galaxies = 60715
     # max_galaxies = 40672  # featured, face-on, good ellipse measurement
     # 40921 in decals/cnn/irregular after cuts, 40672 with ellipses due to nans (same morph. cuts)
     # dataset_name='decals'
     dataset_name ='gz2'
 
-    method = 'ellipse'
-    # method = 'cnn'
+    # method = 'ellipse'
+    method = 'cnn'
 
     # anomalies = 'mergers'
     # anomalies = 'featured'
@@ -208,7 +208,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 print('Calculating fig 5 metrics')
                 sorted_labels = labels[np.argsort(preds)][::-1]
 
-                experiment_name = 'ellipse_loch_{}_{}'.format(np.random.randint(10000), iteration_n)
+                experiment_name = 'latest_cnn_repeat{}'.format(iteration_n)
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
             if batch_n == retrain_batches - 1:
@@ -272,4 +272,4 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 if __name__ == '__main__':
 
-    benchmark_gp(n_iterations=10, n_components=10)
+    benchmark_gp(n_iterations=5, n_components=10)

@@ -41,14 +41,14 @@ def run_pipeline():
     fls = os.listdir(image_dir) # [:1000]
 
     catalogue = pd.DataFrame(data=[{'objid': f_name.replace('.jpg', ''), 'filename': os.path.join(image_dir, f_name)} for f_name in fls])
-    print(catalogue.head())
+    # print(catalogue.head())
 
     features = pd.read_parquet('anomaly/data/EllipseFitFeatures_output_back_10_12.parquet')  # michelle's original
     # sort to match the catalogue
-    print(features.head())
+    # print(features.head())
     features['objid'] = features.index
     features = pd.merge(catalogue[['objid']], features, on='objid', how='inner')
-    print(features.head())
+    # print(features.head())
 
     # drop galaxies with bad features from both catalog and features
     print(len(features), len(catalogue))
@@ -87,21 +87,21 @@ def run_pipeline():
 
     # Now we rescale the features using the same procedure of first creating
     # the pipeline object, then running it on the feature set
-    pipeline_scaler = scaling.FeatureScaler(force_rerun=False,
+    pipeline_scaler = scaling.FeatureScaler(force_rerun=True,
                                             output_dir=output_dir)
     features = pipeline_scaler.run(features)
 
     # The actual anomaly detection is called in the same way by creating an
     # Iforest pipeline object then running it
     pipeline_iforest = isolation_forest.IforestAlgorithm(
-        force_rerun=False, output_dir=output_dir)
+        force_rerun=True, output_dir=output_dir)
     anomalies = pipeline_iforest.run(features)
     # anomalies is indexed by integer rather than by objid/galaxyID in michelle's script, let's tweak that
     anomalies.index = features.index  # no shuffle within iforest
 
     # We convert the scores onto a range of 0-5
     pipeline_score_converter = human_loop_learning.ScoreConverter(
-        force_rerun=False, output_dir=output_dir)
+        force_rerun=True, output_dir=output_dir)
     anomalies = pipeline_score_converter.run(anomalies)
 
     # This is unique to galaxy zoo which has labelled data. We first sort the
@@ -110,11 +110,13 @@ def run_pipeline():
     N_labels = 200
     # The keyword 'human_label' must be used to tell astronomaly which column
     # to use for the HITL
-    anomalies['human_label'] = [-1] * len(anomalies)
+    # anomalies['human_label'] = [-1] * len(anomalies)  # prior to my changes
+    anomalies['human_label'] = [np.nan] * len(anomalies)  # after my changes
+
     inds = anomalies.index[:N_labels]
     human_probs = additional_metadata.loc[inds, 'Class6.1']
     human_scores = np.round(human_probs * 5).astype('int')
-    print(pd.value_counts(human_scores))
+    print('Human scores: ', pd.value_counts(human_scores))
     anomalies.loc[inds, 'human_label'] = human_scores.astype(int)  # add human scores to anomalies df, now has both forest ("score") and human scores ("human_label")
 
     try:
@@ -136,7 +138,7 @@ def run_pipeline():
     # This is the active learning object that will be run on demand by the
     # frontend 
     pipeline_active_learning = human_loop_learning.NeighbourScore(
-        alpha=1, output_dir=output_dir)
+        alpha=1, output_dir=output_dir, force_rerun=True)
 
     # We use TSNE for visualisation which is run in the same way as other parts
     # of the pipeline.
@@ -198,7 +200,6 @@ if __name__ == '__main__':
 
     additional_metadata = df[['Class6.1']]
     print(additional_metadata.head())
-    # exit()
 
     results = run_pipeline()
 
@@ -209,12 +210,42 @@ if __name__ == '__main__':
 
     trained_score_df = results['active_learning']._execute_function(features_and_labels)
     result_df = pd.merge(trained_score_df, anomaly_scores, how='inner', left_index=True, right_index=True)
-    additional_metadata['is_anomaly'] = additional_metadata['Class6.1'] >= 0.9
+    additional_metadata['is_anomaly'] = additional_metadata['Class6.1'] > 0.9
     print(additional_metadata['is_anomaly'].value_counts())
     result_df = pd.merge(result_df, additional_metadata[['is_anomaly']], how='inner', left_index=True, right_index=True)
+    print(result_df['is_anomaly'].value_counts())
+    exit()
 
-    result_df.to_csv('temp_65579fb.csv')
+    name = 'b03996c_old_distances_repeat5_gp9'
+
+    result_df.to_csv('temp_replication_updated_{}.csv'.format(name))
 
     final_sorted_labels = result_df['is_anomaly'][np.argsort(result_df['trained_score'])[::-1]]
-    shared.get_metrics_like_fig_5(final_sorted_labels, method='original', dataset_name='gz2', regression='forest', experiment_name='replication_65579fb')
-    # matches the paper perfectly at commit 65579fb (oct 17 2020)
+    shared.get_metrics_like_fig_5(final_sorted_labels, method='original', dataset_name='gz2', regression='forest', experiment_name='replication_updated_{}'.format(name))
+
+# b03996c, my latest commit, works but badly even with nans fixed - must be a second problem between here and e7
+# b03996c with old distances works! replication w/ gz updates complete
+# compare anomaly/results/gz2/paper_style/fig5_metrics_forest_replication_updated_b03996c_old_distances.png (this script)
+# with anomaly/results/gz2/paper_style/fig5_metrics_forest_lochner_active_old_distances.png
+# however, there is still an issue - this latest version is still a little bit worse than the original paper figure (100->0.6 here vs 0.75 in the paper)
+
+# is this just stochasticity? try a few repeats
+# v4 got ~.7
+
+
+
+# 592d6873 fails
+# 592d6873 with unrefactored human_loop_learning (from prev, cef5a2fc3) works - so it's something wrong with my human loop learning refactor
+# 592d6873 works with only the old distances kept the same
+# 592d6873 fails with only the new distances changed
+#  - my distance "fix" actually broke things
+
+# cef5a2fc3 works with nan
+
+# 82d014c62 works with nan
+
+# e76713e16 midway, doesn't even run - similarly to below, now works
+
+# b34affe doesn't even run - becaus I changed human unlabelled from -1 to nan. swapping in this script, it works
+
+# 416948fd4 my first commit, works
