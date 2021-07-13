@@ -81,13 +81,19 @@ if __name__ == '__main__':
     gz2 = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_replication_updated_416*gp9.json')]
     # scratch = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_lochner_active_old_distances_repeat*.json')]
     scratch = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_lochner_active_old_distances_repeat*scaled*.json')]
+    
+    # main current issue? Doesn't work very well
     gp_ellipse = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_latest_ellipse_loch_repeat*.json')]
     # gp_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_latest_cnn_repeat*.json')]
-    if_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_IF_repeat*.json')]
+    # if_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_IF_repeat*.json')]
     # random_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_repeat*.json')]
-    random_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_scaled_repeat*.json')]
+    random_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_staticdata_random10_*.json')]
     # gp_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_random_maxunc_repeat*.json')]
     # forest_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_forest_latest_cnn_repeat*.json')]
+    twenty_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_20comp_*.json')]
+    forty_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_40comp_*.json')]
+    forty_cnn_rep = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_replication_comp40_*.json')]
+    # maxei_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_retrain1_maxei40_comp40*.json')]
 
     assert original
     assert updated
@@ -99,9 +105,11 @@ if __name__ == '__main__':
     print(len(updated))
     print(len(gz2))
     print(len(scratch))
+    print(len(forty_cnn_rep))
 
     # [(original, 'oct-20 main', 'xkcd:mid blue'), (updated, 'latest main', 'xkcd:soft green'), (gz2, 'latest gz2', 'xkcd:purple pink'), (scratch, 'Scratch', 'black')]:
-    for (experiment, label, color) in [(gp_ellipse, 'gp-ellipse', 'xkcd:mid blue'), (random_cnn, 'rand-cnn', 'xkcd:purple pink'), (if_cnn, 'if-cnn', 'xkcd:soft green'), (scratch, 'if-ellipse', 'black')]:
+    # [(forty_cnn, '40comp', 'xkcd:mid blue'), (random_cnn, '10comp', 'xkcd:purple pink'), (scratch, 'scratch', 'xkcd:soft green'), (forty_cnn_rep, '40compv2', 'black')]:
+    for (experiment, label, color) in [(forty_cnn + forty_cnn_rep, 'gp-cnn', 'xkcd:mid blue'), (scratch, 'baseline', 'black')]:
         for run in experiment:
             plt.plot(run['top_n_galaxies'], run['rank_weighted_scores'], alpha=.2, color=color)
         mean_scores = np.mean(np.array([run['rank_weighted_scores'] for run in experiment]), axis=0)
@@ -116,4 +124,4 @@ if __name__ == '__main__':
     plt.ylabel('Rank Weighted Score')
     plt.tight_layout()
     # plt.show()
-    plt.savefig('fig5_metrics_comparison_with_latest.png')
+    plt.savefig('fig5_metrics_comparison_latest.png')

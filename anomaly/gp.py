@@ -1,6 +1,7 @@
 import random
 import logging
 import json
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -183,7 +184,9 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         # )
 
         acquired_samples = []
+        total_labelled_samples = 0
         for batch_n in range(retrain_batches):
+
             # TODO possibly enforce a hypercube or similarly spread first selection, or perhaps cluster, or...
             # if (batch_n < 5) or (batch_n % 2 == 0):  # if early or even batch_n
             #     # print('explore')
@@ -192,7 +195,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             #     # print('exploit')
             #     learner.query_strategy = max_value_query_strategy
 
-            if batch_n == 0:
+            # if batch_n == 0:
                 # # use isolationforest to pick the first retrain_size starting examples
                 # unsupervised_estimator = IsolationForest(n_estimators=100, contamination='auto')
                 # unsupervised_estimator.fit(embed)
@@ -203,17 +206,34 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 # the same random every iteration, and for gz2 possibly not random unless preshuffled
                 # query_indices = np.arange(retrain_size)  
 
-                # random 10 every time, regardless of dataset overall shuffle
+                # # random 10 every time, regardless of dataset overall shuffle
+                # query_indices = np.arange(len(embed))
+                # random.shuffle(query_indices)
+                # query_indices = query_indices[:retrain_size]
+
+            if batch_n == 0:
+                 # just the first batch to be random ("random" anyway but this allows bootstrapped performance measurement)
                 query_indices = np.arange(len(embed))
                 random.shuffle(query_indices)
-                query_indices = query_indices[:retrain_size]
+                retrain_size = 10
+                query_indices = query_indices[:retrain_size] 
+
+            # elif batch_n < 40:
+            # ultimately this hurt performance and didn't stop occasional failures
+            #     retrain_size = 1  # override
+            #     # learner.query_strategy = max_uncertainty_query_strategy
+            #     query_indices = None
+            #     # print('uncertainy sampling')
+
             else:
+                retrain_size = 10  # reset (hacky, lazy)
                 query_indices = None
+                learner.query_strategy = max_EI
             
 
             X_acquired, _ = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices)  # trained on responses TODO
             acquired_samples.append(X_acquired)  # viz and count only
-            labelled_samples = (1 + batch_n) * retrain_size
+            total_labelled_samples += len(X_acquired)
             # print('Labelled samples: {}'.format(labelled_samples))
 
             # preds = committee.predict(X_test)
@@ -223,18 +243,19 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             # metrics['score'] = learner.estimator.score(embed, labels)  # doesn't seem to work right - should be responses not labels
             metrics['score'] = explained_variance_score(preds, responses)
 
-            metrics['labelled_samples'] = labelled_samples
+            metrics['labelled_samples'] = total_labelled_samples
             metrics['iteration_n'] = iteration_n
-            # print(metrics['labelled_samples'], metrics['accuracy_50'])
+            # print(metrics['total_labelled_samples'], metrics['accuracy_50'])
             all_metrics.append(metrics)
 
 
+            # print(total_labelled_samples)
             # special metrics for fig 5 in astronomaly paper
-            if (dataset_name == 'gz2') and (labelled_samples == 200):
+            if (dataset_name == 'gz2') and (total_labelled_samples == 200):
                 print('Calculating fig 5 metrics')
                 sorted_labels = labels[np.argsort(preds)][::-1]
 
-                experiment_name = 'cnn_random_staticdata_random10_{}'.format(iteration_n)
+                experiment_name = 'cnn_replication_comp40_{}'.format(iteration_n)
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
             if batch_n == retrain_batches - 1:
@@ -266,19 +287,22 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 #     save_loc = '/home/walml/repos/astronomaly/comparison/results/{}/top_12_galaxies_it{}.png'.format(dataset_name, iteration_n)
                 #     shared.save_top_galaxies(preds, metadata, save_loc)
 
-                acquired_samples = np.stack(acquired_samples, axis=0)  # batch, row, feature
-                fig, ax = plt.subplots()
-                # reshape to (row, feature) i.e. drop batch dimension
-                reshaped_samples = acquired_samples.reshape((acquired_samples.shape[0] * acquired_samples.shape[1], acquired_samples.shape[2]))
-                # color first batch by 1, second by...etc
-                colors = np.concatenate([np.ones(retrain_size) * n / retrain_batches for n in range(retrain_batches)])
-                ax.scatter(reshaped_samples[:, 0], reshaped_samples[:, 1], c=colors, alpha=.5, marker='+')
-                ax.set_xlim([-2, 4.2])
-                ax.set_ylim([-3, 2])
-                # fig.colorbar()
-                fig.tight_layout()
-                # purple is early, yellow is late
-                fig.savefig('anomaly/figures/{}/acquired_points_gp_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
+                "only works when all batch sizes are equal"
+                # acquired_samples = np.stack(acquired_samples, axis=0)  # batch, row, feature
+                # with open('anomaly/figures/{}/{}_acquired.pickle'.format(dataset_name, experiment_name), 'wb') as f:
+                #     pickle.dump(acquired_samples, f)
+                # fig, ax = plt.subplots()
+                # # reshape to (row, feature) i.e. drop batch dimension
+                # reshaped_samples = acquired_samples.reshape((acquired_samples.shape[0] * acquired_samples.shape[1], acquired_samples.shape[2]))
+                # # color first batch by 1, second by...etc
+                # colors = np.concatenate([np.ones(retrain_size) * n / retrain_batches for n in range(retrain_batches)])
+                # ax.scatter(reshaped_samples[:, 0], reshaped_samples[:, 1], c=colors, alpha=.5, marker='+')
+                # ax.set_xlim([-2, 4.2])
+                # ax.set_ylim([-3, 2])
+                # # fig.colorbar()
+                # fig.tight_layout()
+                # # purple is early, yellow is late
+                # fig.savefig('anomaly/figures/{}/acquired_points_gp_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
 
 
 
@@ -303,4 +327,23 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 if __name__ == '__main__':
 
-    benchmark_gp(n_iterations=5, n_components=10)
+    benchmark_gp(n_iterations=15, n_components=40, retrain_batches=29)
+
+    # performance is best with 40 components, then 10, then 20. Poor with 200.
+
+    # acquiring the first 40 sequentially (max EI) doesn't help 
+    # performance is very poor with max EI and 1 galaxy per batch always - noise helps regularise?
+
+    # initialising with 100 random points hurts/doesn't solve
+    # initialising with 10 uncertainty-sampled-1-at-a-time hurts/doesn't solve
+    # simply changing the random first point is enough to cause occasional failures
+    # the failures are not obviously different when visualised with umap - missing small clusters?
+    # I think I will have to call this good enough - 30 runs, 4-5 weaker performance (not complete failures)
+    # still averages out well ahead of astronomaly paper
+
+    # from notebook, isolation forest does a fairly bad job at initialising with cnn features
+    # (matches up with fairly mediocre performance)
+
+    # notebook has beautiful figures of everything working
+    # the umapped regression fitting the anomaly density well 
+    # and the acquired points similarly
