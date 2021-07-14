@@ -27,13 +27,38 @@ from modAL.acquisition import max_EI
 import shared
 
 
-def teach_optimizer(optimizer, X_pool, y_pool, retrain_size, query_indices=None):
+def query_optimizer(optimizer, X_pool, y_pool, retrain_size, already_queried_indices=None):
+    # modAL doesn't actually enforce not querying the same point twice, as far as I can tell - it definitely happens
+    # this semi-manual querying tries to avoid that
+    # quite fiddly because of the double indexing - using pd.Series to help
+    y_pool = pd.Series(y_pool)
+    if already_queried_indices is not None:
+        all_indices = np.arange(len(X_pool))
+        remaining_indices = np.sort(list(set(all_indices)- set(already_queried_indices)))
+        X_pool_unqueried = X_pool[remaining_indices]
+        y_pool_unqueried = y_pool[remaining_indices]
+    else:
+        X_pool_unqueried = X_pool.copy()
+        y_pool_unqueried = y_pool.copy()
+    query_indices_in_unqueried, _ = optimizer.query(X_pool_unqueried, n_instances=retrain_size)
+    # X_pool_selected_now = X_pool_unqueried[query_indices_in_unqueried]
+    # the iloc is crucial - use the unqueried index as a numeric index
+    y_pool_selected_now = y_pool_unqueried.iloc[query_indices_in_unqueried]
+    # and now can get back to the original index as a key/value index
+    query_indices_in_full_pool = y_pool_selected_now.index.values
+    return query_indices_in_full_pool
+
+
+
+def teach_optimizer(optimizer, X_pool, y_pool, retrain_size, query_indices=None, already_queried_indices=None):
     if query_indices is None:  # otherwise, override with provided indices
-        query_indices, _ = optimizer.query(X_pool, n_instances=retrain_size)
+        query_indices = query_optimizer(optimizer, X_pool, y_pool, retrain_size, already_queried_indices)
+    else:
+        logging.warning('overriding query with forced indices: {}'.format(query_indices))
     X_acquired = X_pool[query_indices]
     y_acquired = y_pool[query_indices]
     optimizer.teach(X_acquired, y_acquired)  # bootstrap=True
-    return X_acquired, y_acquired  # for analysis
+    return X_acquired, y_acquired, query_indices  # for analysis
 
 
 # i.e. exploration mode
@@ -184,6 +209,8 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         # )
 
         acquired_samples = []
+        already_queried_indices = []
+        known_labels = np.zeros(len(labels)) * np.nan
         total_labelled_samples = 0
         for batch_n in range(retrain_batches):
 
@@ -231,15 +258,22 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 learner.query_strategy = max_EI
             
 
-            X_acquired, _ = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices)  # trained on responses TODO
+            X_acquired, _, query_indices = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices, already_queried_indices=np.array(already_queried_indices))  # trained on responses TODO
             acquired_samples.append(X_acquired)  # viz and count only
             total_labelled_samples += len(X_acquired)
             # print('Labelled samples: {}'.format(labelled_samples))
+            already_queried_indices += list(query_indices)
 
             # preds = committee.predict(X_test)
             # metrics = get_metrics(preds, X_test, y_test)
             preds = learner.predict(embed)
-            metrics = shared.get_metrics(preds, labels)  # measured on the labels TODO
+
+            # where there are known human labels, use them instead of the preds
+            known_labels[query_indices] = labels[query_indices]  # will be updated every batch
+            preds_with_labels = np.where(~np.isnan(known_labels), known_labels.astype(float) * 100, preds)  # *100 ensures true/false labels will be numerical and way bigger if true
+
+            metrics = shared.get_metrics(preds_with_labels, labels)
+    
             # metrics['score'] = learner.estimator.score(embed, labels)  # doesn't seem to work right - should be responses not labels
             metrics['score'] = explained_variance_score(preds, responses)
 
@@ -248,14 +282,13 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             # print(metrics['total_labelled_samples'], metrics['accuracy_50'])
             all_metrics.append(metrics)
 
-
             # print(total_labelled_samples)
             # special metrics for fig 5 in astronomaly paper
             if (dataset_name == 'gz2') and (total_labelled_samples == 200):
                 print('Calculating fig 5 metrics')
-                sorted_labels = labels[np.argsort(preds)][::-1]
+                sorted_labels = labels[np.argsort(preds_with_labels)][::-1]
 
-                experiment_name = 'cnn_replication_comp40_{}'.format(iteration_n)
+                experiment_name = 'cnn_knownlabels_replication_comp40_{}'.format(iteration_n)
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
             if batch_n == retrain_batches - 1:
@@ -347,3 +380,5 @@ if __name__ == '__main__':
     # notebook has beautiful figures of everything working
     # the umapped regression fitting the anomaly density well 
     # and the acquired points similarly
+
+    # may be a good time to check how the metrics work - include the human labels themselves?!

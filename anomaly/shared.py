@@ -267,9 +267,9 @@ def get_embed(features, n_components, save_embed='', save_variance='', new=True)
             plt.close()
     else:
         raise NotImplementedError # needs care due to shuffling, except GZ2
-        assert os.path.isfile(save_embed)
-        with open(save_embed, 'rb') as f:
-            embed = pickle.load(f)
+        # assert os.path.isfile(save_embed)
+        # with open(save_embed, 'rb') as f:
+        #     embed = pickle.load(f)
     return embed
 
 

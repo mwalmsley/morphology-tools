@@ -94,22 +94,25 @@ if __name__ == '__main__':
     forty_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_40comp_*.json')]
     forty_cnn_rep = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_replication_comp40_*.json')]
     # maxei_cnn = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_retrain1_maxei40_comp40*.json')]
+    forty_cnn_human = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_knownlabels_comp40_*.json')]
+    forty_cnn_human_rep = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_knownlabels_replication_comp40_*.json')]
 
     assert original
     assert updated
     assert gz2
     assert scratch
     assert gp_ellipse
+    assert forty_cnn_human
 
     print(len(original))
     print(len(updated))
     print(len(gz2))
     print(len(scratch))
-    print(len(forty_cnn_rep))
+    print(len(forty_cnn_rep) + len(forty_cnn))
 
     # [(original, 'oct-20 main', 'xkcd:mid blue'), (updated, 'latest main', 'xkcd:soft green'), (gz2, 'latest gz2', 'xkcd:purple pink'), (scratch, 'Scratch', 'black')]:
     # [(forty_cnn, '40comp', 'xkcd:mid blue'), (random_cnn, '10comp', 'xkcd:purple pink'), (scratch, 'scratch', 'xkcd:soft green'), (forty_cnn_rep, '40compv2', 'black')]:
-    for (experiment, label, color) in [(forty_cnn + forty_cnn_rep, 'gp-cnn', 'xkcd:mid blue'), (scratch, 'baseline', 'black')]:
+    for (experiment, label, color) in [(forty_cnn_human + forty_cnn_human_rep, 'gp+cnn+h', 'xkcd:purple pink'), (forty_cnn + forty_cnn_rep, 'gp+cnn', 'xkcd:mid blue'), (scratch, 'baseline', 'black')]:
         for run in experiment:
             plt.plot(run['top_n_galaxies'], run['rank_weighted_scores'], alpha=.2, color=color)
         mean_scores = np.mean(np.array([run['rank_weighted_scores'] for run in experiment]), axis=0)
