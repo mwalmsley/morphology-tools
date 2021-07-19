@@ -2,6 +2,7 @@ import random
 import logging
 import json
 import pickle
+import functools
 
 import numpy as np
 import pandas as pd
@@ -75,6 +76,9 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
     return top_indices, X[top_indices].squeeze()
 
 
+# def max_ei_with_tradeoff(modal_learner, X, n_instances=1):
+#     return max_EI(modal_learner, X, n_instances=n_instances, tradeoff=0.5)
+
 # TODO increasing batch size for constant fit time?
 
 def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_size=10, retrain_batches=29):
@@ -137,10 +141,11 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
     all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
 
+        experiment_name = 'cnn_{}_comp40_latest_{}'.format(anomalies, iteration_n)
+
         # without the reshuffle of the data and reshuffle of the starting 10, exactly the same galaxies are selected and the variation is completely gone
         # (all failed in fact)
         # with only the reshuffle of the starting 10, the variation is present as normal - so the variation between runs really is the start and not the data shuffle itself
-
         shuffle_indices = np.arange(len(labels))
         # random.shuffle(shuffle_indices)  # inplace
         embed = embed[shuffle_indices]
@@ -148,70 +153,22 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         responses = responses[shuffle_indices]
         metadata = metadata.iloc[shuffle_indices].reset_index(drop=True)  # hopefully pandas friendly
 
-        # X_train, y_train, X_pool, y_pool, X_test, y_test = split_three_ways(embed, labels, train_size=10, iteration_n=iteration_n)
-        # X_train, X_pool, y_train, y_pool = train_test_split(embed, labels, train_size=training_size, iteration_n=iteration_n)
-        # print(X_train.shape, X_pool.shape)
-        # print(y_train.shape, y_pool.shape)
-        # print('Total interesting: {}'.format(np.isclose(y_test, 4).sum()))
-
-        # learners = []
-        # n_learners = 5
-        # for _ in range(n_learners):
-        #     kernel = RBF() + WhiteKernel()  # or matern
-        #     gp = GaussianProcessRegressor(kernel=kernel, iteration_n=iteration_n)
-        #     learner = ActiveLearner(
-        #         estimator=gp,
-        #         query_strategy=max_EI,
-        #         X_training=X_train,
-        #         y_training=y_train
-        #     )
-        #     learners.append(learner)
-
-        # committee = CommitteeRegressor(
-        #     learner_list=learners,
-        #     query_strategy=max_std_sampling
-        # )
-
-
-        # kernel = RBF() + WhiteKernel()  # or matern
         kernel = RationalQuadratic() + WhiteKernel()  # or matern
         gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(embed[:1000], responses[:1000])
-        # print(gp.score(embed[-1000:], responses[-1000:]))
 
-        # kernel = Matern(nu=1.5) + WhiteKernel()  # or matern
-        # gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(embed[:1000], responses[:1000])
-        # print(gp.score(embed[-1000:], responses[-1000:]))
-
-        # kernel = Matern(nu=2.5) + WhiteKernel()  # or matern
-        # gp = GaussianProcessRegressor(kernel=kernel, random_state=iteration_n)
-        # gp.fit(embed[:1000], responses[:1000])
-        # print(gp.score(embed[-1000:], responses[-1000:]))
-
-        # exit()
+        max_ei_with_tradeoff = functools.partial(max_EI, tradeoff=0.5)
+        active_query_strategy = max_ei_with_tradeoff
 
         learner = BayesianOptimizer(
             estimator=gp,
-            query_strategy=max_EI
+            query_strategy=active_query_strategy
         )
-
-        # learner = BayesianOptimizer(
-        #     estimator=gp,
-        #     query_strategy=max_uncertainty_query_strategy
-        # )
-
-        # learner = ActiveLearner(
-        #     estimator=gp,
-        #     query_strategy=,
-        #     X_training=X_train,
-        #     y_training=y_train
-        # )
 
         acquired_samples = []
         already_queried_indices = []
         known_labels = np.zeros(len(labels)) * np.nan
         total_labelled_samples = 0
+
         for batch_n in range(retrain_batches):
 
             # TODO possibly enforce a hypercube or similarly spread first selection, or perhaps cluster, or...
@@ -242,26 +199,17 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                  # just the first batch to be random ("random" anyway but this allows bootstrapped performance measurement)
                 query_indices = np.arange(len(embed))
                 random.shuffle(query_indices)
-                retrain_size = 10
                 query_indices = query_indices[:retrain_size] 
 
-            # elif batch_n < 40:
-            # ultimately this hurt performance and didn't stop occasional failures
-            #     retrain_size = 1  # override
-            #     # learner.query_strategy = max_uncertainty_query_strategy
-            #     query_indices = None
-            #     # print('uncertainy sampling')
-
             else:
-                retrain_size = 10  # reset (hacky, lazy)
                 query_indices = None
-                learner.query_strategy = max_EI
+                learner.query_strategy = active_query_strategy
             
 
             X_acquired, _, query_indices = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices, already_queried_indices=np.array(already_queried_indices))  # trained on responses TODO
             acquired_samples.append(X_acquired)  # viz and count only
             total_labelled_samples += len(X_acquired)
-            # print('Labelled samples: {}'.format(labelled_samples))
+            # print('Labelled samples: {}'.format(total_labelled_samples))
             already_queried_indices += list(query_indices)
 
             # preds = committee.predict(X_test)
@@ -284,11 +232,12 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
             # print(total_labelled_samples)
             # special metrics for fig 5 in astronomaly paper
-            if (dataset_name == 'gz2') and (total_labelled_samples == 200):
+
+
+            if total_labelled_samples == 200:
                 print('Calculating fig 5 metrics')
                 sorted_labels = labels[np.argsort(preds_with_labels)][::-1]
 
-                experiment_name = 'cnn_knownlabels_replication_comp40_{}'.format(iteration_n)
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
             if batch_n == retrain_batches - 1:
@@ -360,7 +309,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 if __name__ == '__main__':
 
-    benchmark_gp(n_iterations=15, n_components=40, retrain_batches=29)
+    benchmark_gp(n_iterations=15, n_components=40, retrain_batches=29, retrain_size=10)
 
     # performance is best with 40 components, then 10, then 20. Poor with 200.
 

@@ -97,6 +97,19 @@ if __name__ == '__main__':
     forty_cnn_human = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_knownlabels_comp40_*.json')]
     forty_cnn_human_rep = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_knownlabels_replication_comp40_*.json')]
 
+    irregular = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/decals/paper_style/fig5_metrics_gp_cnn_irregular*.json')]
+    mergers = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/decals/paper_style/fig5_metrics_gp_cnn_mergers*.json')]
+    ring_responses = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/decals/paper_style/fig5_metrics_gp_cnn_ring_responses*.json')]
+
+    odd_explore_p5 = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_odd_comp40_trade0p5_debug_*.json')]
+    assert odd_explore_p5
+
+    odd_explore_retrain4 = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_odd_comp40_trade0p5_retrain3_*.json')]
+    assert odd_explore_retrain4
+
+    odd_explore_retrain1 = [json.load(open(loc, 'r')) for loc in glob.glob('/home/walml/repos/morphology-tools/anomaly/results/gz2/paper_style/fig5_metrics_gp_cnn_odd_comp40_trade0p5_retrain1_*.json')]
+    assert odd_explore_retrain1
+
     assert original
     assert updated
     assert gz2
@@ -112,7 +125,10 @@ if __name__ == '__main__':
 
     # [(original, 'oct-20 main', 'xkcd:mid blue'), (updated, 'latest main', 'xkcd:soft green'), (gz2, 'latest gz2', 'xkcd:purple pink'), (scratch, 'Scratch', 'black')]:
     # [(forty_cnn, '40comp', 'xkcd:mid blue'), (random_cnn, '10comp', 'xkcd:purple pink'), (scratch, 'scratch', 'xkcd:soft green'), (forty_cnn_rep, '40compv2', 'black')]:
-    for (experiment, label, color) in [(forty_cnn_human + forty_cnn_human_rep, 'gp+cnn+h', 'xkcd:purple pink'), (forty_cnn + forty_cnn_rep, 'gp+cnn', 'xkcd:mid blue'), (scratch, 'baseline', 'black')]:
+    # for (experiment, label, color) in [(forty_cnn_human + forty_cnn_human_rep, 'gp+cnn+h', 'xkcd:purple pink'), (scratch, 'baseline', 'black')]:
+    # for (experiment, label, color) in [(irregular, 'decals-irregular', 'xkcd:purple pink'), (mergers, 'decals-merger', 'xkcd:mid blue'), (ring_responses, 'decals-rings', 'black')]:
+    # for (experiment, label, color) in [(odd_explore_p5, 'p5', 'xkcd:mid blue'), (odd_explore_retrain4, 'retrain4', 'xkcd:soft green'), (forty_cnn, '40comp', 'black')]:
+    for (experiment, label, color) in [(odd_explore_p5, 'batch=10', 'xkcd:mid blue'), (odd_explore_retrain4, 'batch=4', 'xkcd:soft green'), (odd_explore_retrain1, 'batch=1', 'black')]:
         for run in experiment:
             plt.plot(run['top_n_galaxies'], run['rank_weighted_scores'], alpha=.2, color=color)
         mean_scores = np.mean(np.array([run['rank_weighted_scores'] for run in experiment]), axis=0)
@@ -126,5 +142,7 @@ if __name__ == '__main__':
     plt.xlabel('N galaxies for Rank Weighted Score')
     plt.ylabel('Rank Weighted Score')
     plt.tight_layout()
-    # plt.show()
-    plt.savefig('fig5_metrics_comparison_latest.png')
+    plt.show()
+    # plt.savefig('fig5_metrics_comparison_latest_two.png')
+    # plt.savefig('fig5_metrics_comparison_decals.png')
+    # plt.savefig('fig5_metrics_comparison_latest_two.png')

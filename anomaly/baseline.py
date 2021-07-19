@@ -55,8 +55,8 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
     dataset_name = 'gz2'
     # dataset_name = 'decals'
 
-    # method = 'ellipse'
-    method = 'cnn'
+    method = 'ellipse'
+    # method = 'cnn'
 
     # anomalies = 'mergers'
     # anomalies = 'rings'
@@ -153,19 +153,19 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
         metrics['random_state'] = 0
         metrics['score'] = explained_variance_score(regressor_preds, forest_sorted_responses)
 
+        experiment_name = 'latest_{}_{}_comp40'.format(method, anomalies)
+
         # special metrics for fig 5 in astronomaly paper
-        if (dataset_name == 'gz2') and (labelled_samples == 200):
+        if labelled_samples == 200:
             
             print('Human scores at N = 200: ', pd.value_counts(regressor_y))
             
             print('Calculating fig 5 metrics')
 
-            experiment_name = 'latest_cnn_repeat5'
             shared.get_metrics_like_fig_5(active_weighted_sorted_labels, method, dataset_name, 'forest', experiment_name)
 
             # active_df = pd.DataFrame(data={'rescaled_scores': rescaled_scores[score_indices], 'all_scores': all_scores[score_indices], 'objid': metadata['objid'].values[score_indices], 'joint_preds': joint_preds, 'labels': labels[score_indices], 'active_weighted_sorted_labels': active_weighted_sorted_labels})
             # active_df.to_csv('temp_active_df.csv', index=False)
-            exit()
 
 
         all_metrics.append(metrics)
@@ -174,21 +174,21 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
         # shared.visualise_predictions_in_first_two_dims(sorted_X, joint_preds, 'comparison/figures/joint_preds_labelled_{}.png'.format(labelled_samples))
         # shared.visualise_predictions_in_first_two_dims(regressor_X, regressor_y, 'comparison/figures/acquired_labels_{}.png'.format(labelled_samples), xlim=[-7.5, 7.5], ylim=[-7, 8.5])
 
-    df_loc = 'anomaly/results/{}/latest_baseline_metrics_{}.csv'.format(dataset_name, method)
-    df = pd.DataFrame(all_metrics)
-    df.to_csv(df_loc, index=False)
+    # df_loc = 'anomaly/results/{}/latest_baseline_metrics_{}.csv'.format(dataset_name, method)
+    # df = pd.DataFrame(all_metrics)
+    # df.to_csv(df_loc, index=False)
 
-    df_loc = 'anomaly/results/{}/latest_baseline_metrics_{}.csv'.format(dataset_name, method)
-    df = pd.read_csv(df_loc)
+    # df_loc = 'anomaly/results/{}/latest_baseline_metrics_{}.csv'.format(dataset_name, method)
+    # df = pd.read_csv(df_loc)
 
-    save_loc = 'anomaly/results/{}/baseline_metrics_total{}_batch{}_{}_{}.png'.format(
-        dataset_name,
-        len(features),  # num galaxies
-        retrain_size,
-        anomalies,
-        method)
+    # save_loc = 'anomaly/results/{}/baseline_metrics_total{}_batch{}_{}_{}.png'.format(
+    #     dataset_name,
+    #     len(features),  # num galaxies
+    #     retrain_size,
+    #     anomalies,
+    #     method)
 
-    shared.visualise_metrics(df, save_loc, total_anomalies=labels.sum())  # assumes responses, not classes
+    # shared.visualise_metrics(df, save_loc, total_anomalies=labels.sum())  # assumes responses, not classes
 
 
 if __name__ == '__main__':

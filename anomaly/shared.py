@@ -27,7 +27,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
 
     if method == 'ellipse':
         # ellipse fitting to galaxies in dr5_volunteer_catalog_internal, not quite as many as auto_posteriors
-        feature_df = pd.read_parquet('decals_ellipse_features.parquet')  
+        feature_df = pd.read_parquet('/home/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
         feature_cols = feature_df.columns.values
         feature_df['iauname'] = feature_df.index.astype(str)
         feature_df = feature_df.reset_index(drop=True)
@@ -51,10 +51,13 @@ def load_decals_data(method, anomalies, max_galaxies=None):
         feature_df = feature_df[feature_df['iauname'].str.startswith('J')]  
 
         df = pd.merge(feature_df, label_df, how='inner', on='iauname')
-        print(len(feature_df), len(label_df))
+        print('Feature rows: {}, label rows: {}'.format(len(feature_df), len(label_df)))
         # assert len(df) == len(feature_df) # TODO investigate - I think features_concat includes galaxies without quality checks
         
         feature_cols = [col for col in df.columns.values if col.startswith('feat')]
+
+    else:
+        raise ValueError('method {} not recognised'.format(method))
 
     # this will drop some rows in some configurations (e.g. filtering for featured only)
     # so only apply max_galaxies afterwards
@@ -114,7 +117,7 @@ def df_to_decals_training_data(df, anomalies, feature_cols):
         labels = np.array(df['merging_merger_fraction'] > 0.7)  # conservative scoring following astronomaly paper
         print('WARNING temp override merger labels')
         # labels = np.array(df['merging_merger_fraction'] > 0.2)
-    if anomalies == 'featured':  # for debugging/slides only
+    elif anomalies == 'featured':  # for debugging/slides only
         responses = np.around(np.array(df['smooth-or-featured_featured-or-disk_fraction'] * 5))  # integer responses "from" UI
         labels = np.array(df['merging_merger_fraction'] > 0.5)
     elif anomalies == 'rings':
@@ -143,6 +146,8 @@ def df_to_decals_training_data(df, anomalies, feature_cols):
         print(len(df), 'with non-nan irregular fractions')
         labels = np.array(df['rare-features_irregular_fraction'] >= 0.35)
         responses = np.array(df['rare-features_irregular_fraction'])
+    else:
+        raise ValueError('Anomalies {} not recognised'.format(anomalies))
 
     features = df[feature_cols].values
 
