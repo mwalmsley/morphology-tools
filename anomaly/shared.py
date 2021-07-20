@@ -179,31 +179,79 @@ def load_gz2_data(method, anomalies, max_galaxies):
         df = pd.merge(feature_df, label_df, how='inner', on='objid')
         assert len(feature_df) == len(df)
 
-        df['t06_odd_a14_yes_fraction'] = df['Class6.1']
+        # exclude galaxies with cnn features, based on precalculated venn diagram
+        # see identify_gz2_galaxies.ipynb
+        venn_df = pd.read_csv('/home/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
+        print('Galaxies before venn diagram: ', len(df))
+        df = df[df['objid'].astype(str).isin(venn_df['GalaxyID'].astype(str))]
+        print('Galaxies after venn diagram: ', len(df))
 
-        
+        df['t06_odd_a14_yes_fraction_kaggle'] = df['Class6.1']
+
+        df.to_csv('temp_latest_forest_df.csv', index=False)
 
     elif method == 'cnn':
+        # cnn predictions on all gz2 galaxies
         features = pd.read_parquet('/media/walml/beta1/cnn_features/gz2/cnn_features_concat.parquet')  # features and png_loc
         features['id_str'] = features['id_str'].astype(str)
 
         catalog = pd.read_parquet(
             '/media/walml/beta1/galaxy_zoo/gz2/subjects/image_master_catalog.parquet',
             columns=['dr7objid', 't06_odd_a14_yes_fraction'])  # includes responses
+
+        print((catalog['t06_odd_a14_yes_fraction'] > 0.9).sum())
+
         catalog['id_str'] = catalog['dr7objid'].astype(str)
         df = pd.merge(features, catalog, how='inner', on='id_str')
+
+        print((df['t06_odd_a14_yes_fraction'] > 0.9).sum())
+
+        # features and catalog should merge perfectly
         print(len(features), len(catalog), len(df))
         assert len(df) == len(features)
-        # TODO filter to 60k subset from kaggle
+
         feature_cols = [col for col in df.columns.values if col.startswith('feat')]
         features = df[feature_cols].values  # not yet pca'd, for now - may cache instead
+        
+        # #  filter to 60k subset from kaggle, not just randomly
+        # kaggle_df = pd.read_csv('/media/walml/beta1/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv', usecols=['GalaxyID', 'Class6.1'])  # from kaggle
+        # key_df = pd.read_csv('/home/walml/Downloads/kaggle_gz_allgals_randomgalaxyid.csv', usecols=['GalaxyID', 'dr7objid'])
+        # kaggle_df['GalaxyID'] = kaggle_df['GalaxyID'].astype(str)
+        # key_df['GalaxyID'] = key_df['GalaxyID'].astype(str)
+        # key_df['dr7objid'] = key_df['dr7objid'].astype(str)
+        # kaggle_df['t06_odd_a14_yes_fraction_kaggle'] = kaggle_df['Class6.1']
+        # kaggle_key_df = pd.merge(kaggle_df, key_df, on='GalaxyID', how='inner')
+        # print(len(kaggle_df), len(key_df), len(kaggle_key_df))
 
-    if max_galaxies is not None:
-        logging.info('Sampling {} galaxies from {} total'.format(max_galaxies, len(df)))
-        df = df.sample(max_galaxies)
+        # print(df['id_str'])
+        # print(kaggle_key_df['dr7objid'])
 
-    responses = np.around(np.array(df['t06_odd_a14_yes_fraction'] * 5))  # integer responses "from" UI
-    labels = np.array(df['t06_odd_a14_yes_fraction'] > 0.9)  # conservative scoring following astronomaly paper
+        # print('df before selecting kaggle only: ', len(df))
+        # df['dr7objid'] = df['dr7objid'].astype(str)
+        # # df = df[df['id_str'].isin(set(kaggle_key_df['dr7objid']))]
+        # df = pd.merge(df, kaggle_key_df, on='dr7objid', how='inner')
+        # print('df after selecting kaggle only: ', len(df))
+
+        # precalculated version that includes dropping galaxies with nan ellipse features
+        venn_df = pd.read_csv('/home/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
+        venn_df['dr7objid'] = venn_df['dr7objid'].astype(str)
+        print('Galaxies before venn diagram: ', len(df))
+        # df = df[df['id_str'].astype(str).isin(venn_df['dr7objid'].astype(str))]
+        df = pd.merge(df, venn_df, how='inner', left_on='id_str', right_on='dr7objid')
+        print('Galaxies after venn diagram: ', len(df))
+        # still need to be sure to use the kaggle labels
+        df['t06_odd_a14_yes_fraction_kaggle'] = df['Class6.1']
+        del df['t06_odd_a14_yes_fraction'] 
+
+        # df.to_csv('temp_latest_cnn_df.csv', index=False)
+
+    # if max_galaxies is not None:
+    #    
+    #     logging.info('Sampling {} galaxies from {} total'.format(max_galaxies, len(df)))
+    #     df = df.sample(max_galaxies)
+
+    responses = np.around(np.array(df['t06_odd_a14_yes_fraction_kaggle'] * 5))  # integer responses "from" UI
+    labels = np.array(df['t06_odd_a14_yes_fraction_kaggle'] > 0.9)  # conservative scoring following astronomaly paper
     features = df[feature_cols].values
 
     if method == 'ellipse':

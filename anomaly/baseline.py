@@ -45,7 +45,8 @@ def joint_predict(rescaled_anomaly_scores, regressor_scores, distances):
     return weighted_anomaly_scores
 
 
-def benchmark_default(retrain_size=10, retrain_batches=30):
+def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
+    
 
     # max_galaxies = 1000
     # max_galaxies = 10000
@@ -64,6 +65,7 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
     # anomalies = 'irregular'
     anomalies = 'odd'
 
+    experiment_name = 'kaggle_{}_{}_{}'.format(method, anomalies, run_n)
 
     if dataset_name == 'gz2':
         features, labels, responses, metadata = shared.load_gz2_data(method=method, anomalies=anomalies, max_galaxies=max_galaxies)
@@ -76,6 +78,9 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
     print('Labels: \n', pd.value_counts(labels))
     print('Responses: \n', pd.value_counts(responses))
+
+    # exit()
+
     if max_galaxies is not None:
         if not len(labels) == max_galaxies:
             logging.warning('Expected {} galaxies but only recieved {}'.format(max_galaxies, len(labels)))
@@ -83,7 +88,8 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
     # always use embed with cnn, 1000 features is silly - probably?
     if method == 'cnn':
         print('Applying PCA for embedding')
-        features = shared.get_embed(features, n_components=10, save='')  # optionally compress first with PCA
+        raise NotImplementedError
+        # features = shared.get_embed(features, n_components=10, save='')  # optionally compress first with PCA
 
 
     if dataset_name == 'simulated':
@@ -153,7 +159,6 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
         metrics['random_state'] = 0
         metrics['score'] = explained_variance_score(regressor_preds, forest_sorted_responses)
 
-        experiment_name = 'latest_{}_{}_comp40'.format(method, anomalies)
 
         # special metrics for fig 5 in astronomaly paper
         if labelled_samples == 200:
@@ -166,6 +171,16 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
             # active_df = pd.DataFrame(data={'rescaled_scores': rescaled_scores[score_indices], 'all_scores': all_scores[score_indices], 'objid': metadata['objid'].values[score_indices], 'joint_preds': joint_preds, 'labels': labels[score_indices], 'active_weighted_sorted_labels': active_weighted_sorted_labels})
             # active_df.to_csv('temp_active_df.csv', index=False)
+
+            predictions_record = {
+                'preds_with_labels': joint_preds.astype(float).tolist(),
+                'responses': forest_sorted_responses.astype(int).tolist(),
+                'labels': forest_sorted_labels.astype(int).tolist(),
+                'acquired_features': np.array(regressor_X).tolist(),
+                'acquired_labels': np.array(regressor_y).tolist()
+            }
+            with open('anomaly/results/{}/predictions_forest_{}_{}.json'.format(dataset_name, method, experiment_name), 'w') as f:
+                json.dump(predictions_record, f)
 
 
         all_metrics.append(metrics)
@@ -193,4 +208,6 @@ def benchmark_default(retrain_size=10, retrain_batches=30):
 
 if __name__ == '__main__':
 
-    benchmark_default()
+    for run_n in range(7, 15):
+        print(run_n)
+        benchmark_default(run_n=run_n)

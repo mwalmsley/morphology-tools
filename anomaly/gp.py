@@ -111,6 +111,9 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
     print('Labels: \n', pd.value_counts(labels))
     print('Responses: \n', pd.value_counts(responses))
+
+
+    # exit()
     if max_galaxies is not None:
         if not len(labels) == max_galaxies:
             logging.warning('Expected {} galaxies but only recieved {}'.format(max_galaxies, len(labels)))
@@ -122,7 +125,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         new_embed = True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
         embed = shared.get_embed(features, n_components=n_components, save_variance=save_variance, save_embed=save_embed, new=new_embed)
         logging.info('Applying zero mean unit variance transform to embed')
-        # for ellipses only, apply sklearn StandardScalar i.e. zero mean unit variance transform as per astronomaly
+        # for ellipses only, StandardScalar i.e. zero mean unit variance transform as per astronomaly already applied in shared.py
         scl = StandardScaler()
         embed = scl.fit_transform(embed)
 
@@ -141,7 +144,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
     all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
 
-        experiment_name = 'cnn_{}_comp40_latest_{}'.format(anomalies, iteration_n)
+        experiment_name = 'cnn_{}_kagglev3_{}'.format(anomalies, iteration_n)
 
         # without the reshuffle of the data and reshuffle of the starting 10, exactly the same galaxies are selected and the variation is completely gone
         # (all failed in fact)
@@ -165,6 +168,7 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         )
 
         acquired_samples = []
+        acquired_labels = []
         already_queried_indices = []
         known_labels = np.zeros(len(labels)) * np.nan
         total_labelled_samples = 0
@@ -205,9 +209,10 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
                 query_indices = None
                 learner.query_strategy = active_query_strategy
             
-
-            X_acquired, _, query_indices = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices, already_queried_indices=np.array(already_queried_indices))  # trained on responses TODO
+            X_acquired, y_acquired, query_indices = teach_optimizer(learner, embed, responses, retrain_size, query_indices=query_indices, already_queried_indices=np.array(already_queried_indices))  # trained on responses TODO
             acquired_samples.append(X_acquired)  # viz and count only
+            acquired_labels.append(y_acquired)
+
             total_labelled_samples += len(X_acquired)
             # print('Labelled samples: {}'.format(total_labelled_samples))
             already_queried_indices += list(query_indices)
@@ -228,6 +233,9 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             metrics['labelled_samples'] = total_labelled_samples
             metrics['iteration_n'] = iteration_n
             # print(metrics['total_labelled_samples'], metrics['accuracy_50'])
+
+            metrics['total_anomalies'] = labels.sum()
+
             all_metrics.append(metrics)
 
             # print(total_labelled_samples)
@@ -240,29 +248,44 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
                 shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
-            if batch_n == retrain_batches - 1:
+                predictions_record = {
+                    'preds_gp_only': preds.astype(float).tolist(),
+                    'preds_with_labels': preds_with_labels.astype(float).tolist(),
+                    'responses': responses.astype(int).tolist(),
+                    'labels': labels.astype(int).tolist(),
+                    'acquired_features': np.array(acquired_samples).tolist(),
+                    'acquired_labels': np.array(acquired_labels).tolist()
+                }
+                with open('anomaly/results/{}/predictions_gp_{}_{}.json'.format(dataset_name, method, experiment_name), 'w') as f:
+                    json.dump(predictions_record, f)
+
+                # df_loc = 'anomaly/results/{}/gp_metrics_{}_{}.csv'.format(dataset_name, method, experiment_name)
+                # df = pd.DataFrame(data=all_metrics)
+                # df.to_csv(df_loc, index=False)
+
+                break
 
                 # embed_subset, responses_subset, labels_subset, preds_subset = embed[:5000], responses[:5000], labels[:5000], preds[:5000]
 
-                fig, ax = plt.subplots()
-                ax.scatter(embed[:, 0], embed[:, 1], alpha=.06, s=1.)
-                ax.set_xlim([-2, 4.2])
-                ax.set_ylim([-3, 2])
-                # ax.axis('off')
-                fig.tight_layout()
-                fig.savefig('anomaly/figures/{}/embed_first_2_components_dist_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
-                plt.close()
-                # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(preds_subset), alpha=.3)
-                fig, ax = plt.subplots()
+                # fig, ax = plt.subplots()
+                # ax.scatter(embed[:, 0], embed[:, 1], alpha=.06, s=1.)
+                # ax.set_xlim([-2, 4.2])
+                # ax.set_ylim([-3, 2])
+                # # ax.axis('off')
+                # fig.tight_layout()
+                # fig.savefig('anomaly/figures/{}/embed_first_2_components_dist_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
+                # plt.close()
+                # # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(preds_subset), alpha=.3)
+                # fig, ax = plt.subplots()
 
-                # print((np.clip(preds, 1., 3.)-1)/2.)
-                ax.scatter(embed[:, 0], embed[:, 1], c=(np.clip(preds, 1., 3.)-1)/2., alpha=.06, s=1)
-                ax.set_xlim([-2, 4.2])
-                ax.set_ylim([-3, 2])
-                # ax.axis('off')
-                fig.tight_layout()
-                fig.savefig('anomaly/figures/{}/embed_first_2_components_final_preds_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
-                plt.close()
+                # # print((np.clip(preds, 1., 3.)-1)/2.)
+                # ax.scatter(embed[:, 0], embed[:, 1], c=(np.clip(preds, 1., 3.)-1)/2., alpha=.06, s=1)
+                # ax.set_xlim([-2, 4.2])
+                # ax.set_ylim([-3, 2])
+                # # ax.axis('off')
+                # fig.tight_layout()
+                # fig.savefig('anomaly/figures/{}/embed_first_2_components_final_preds_{}_{}.png'.format(dataset_name, anomalies, experiment_name))
+                # plt.close()
 
 
                 # if (dataset_name == 'gz2') or (dataset_name == 'decals'):
@@ -288,23 +311,6 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 
 
-    df_loc = 'anomaly/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
-    df = pd.DataFrame(data=all_metrics)
-    df.to_csv(df_loc, index=False)
-
-    df_loc = 'anomaly/results/{}/gp_latest_metrics_{}.csv'.format(dataset_name, method)
-    df = pd.read_csv(df_loc)
-
-    save_loc =  'anomaly/results/{}/gp_metrics_total{}_batch{}_d{}_it{}_{}_{}.png'.format(
-        dataset_name,
-        len(labels),  # num galaxies
-        retrain_size,
-        n_components,
-        n_iterations,
-        anomalies,
-        method)
-    
-    shared.visualise_metrics(df, save_loc, total_anomalies=labels.sum())
 
 
 if __name__ == '__main__':
