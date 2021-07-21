@@ -50,11 +50,12 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
     # max_galaxies = 1000
     # max_galaxies = 10000
-    max_galaxies = 60715  # 61578 gz2 kaggle galaxies, a few with nan ellipse features (1 extra nan with my ellipse features)
+    # max_galaxies = 60715  # 61578 gz2 kaggle galaxies, a few with nan ellipse features (1 extra nan with my ellipse features)
     # max_galaxies = 40672
+    max_galaxies = None
 
-    dataset_name = 'gz2'
-    # dataset_name = 'decals'
+    # dataset_name = 'gz2'
+    dataset_name = 'decals'
 
     method = 'ellipse'
     # method = 'cnn'
@@ -62,10 +63,10 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
     # anomalies = 'mergers'
     # anomalies = 'rings'
     # anomalies = 'ring_responses'
-    # anomalies = 'irregular'
-    anomalies = 'odd'
+    anomalies = 'irregular'
+    # anomalies = 'odd'
 
-    experiment_name = 'kaggle_{}_{}_{}'.format(method, anomalies, run_n)
+    experiment_name = '{}_{}_nofilter_final_{}'.format(method, anomalies, run_n)
 
     if dataset_name == 'gz2':
         features, labels, responses, metadata = shared.load_gz2_data(method=method, anomalies=anomalies, max_galaxies=max_galaxies)
@@ -208,6 +209,6 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
 if __name__ == '__main__':
 
-    for run_n in range(7, 15):
+    for run_n in range(15):
         print(run_n)
         benchmark_default(run_n=run_n)

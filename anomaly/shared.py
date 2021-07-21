@@ -22,7 +22,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
 
     local = os.path.isdir('/home/walml')
 
-    label_df = get_decals_label_df(anomalies, local)
+    label_df = get_decals_label_df(anomalies, local)  # no dependence on method or features
     # label_df['objid'] = label_df['iauname']
 
     if method == 'ellipse':
@@ -37,7 +37,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
         feature_df = feature_df[~bad_rows]
 
         df = pd.merge(feature_df, label_df, how='inner', on='iauname')
-        assert len(feature_df) == len(df)
+        assert len(feature_df) == len(df)  # all features should have a label
 
 
     elif method == 'cnn':
@@ -53,7 +53,16 @@ def load_decals_data(method, anomalies, max_galaxies=None):
         df = pd.merge(feature_df, label_df, how='inner', on='iauname')
         print('Feature rows: {}, label rows: {}'.format(len(feature_df), len(label_df)))
         # assert len(df) == len(feature_df) # TODO investigate - I think features_concat includes galaxies without quality checks
-        
+
+        # also drop the bad ellipse rows (developed in identify_gz2_galaxies.ipynb)
+        ellipse_feature_df = pd.read_parquet('/home/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
+        ellipse_feature_df['iauname'] = ellipse_feature_df.index.astype(str)
+        bad_ellipse_features = ellipse_feature_df[np.any(ellipse_feature_df.isna(), axis=1)]
+        bad_ellipse_galaxies = bad_ellipse_features['iauname']
+        print('Galaxies before dropping bad ellipse features: {}'.format(len(df)))
+        df = df[~df['iauname'].isin(bad_ellipse_galaxies)]
+        print('Galaxies after dropping bad ellipse features: {}'.format(len(df)))
+
         feature_cols = [col for col in df.columns.values if col.startswith('feat')]
 
     else:
@@ -80,72 +89,99 @@ def load_decals_data(method, anomalies, max_galaxies=None):
 
 def get_decals_label_df(anomalies, local):
     if (anomalies == 'mergers') or (anomalies == 'featured'):
-        if local:
-            # TODO full decals predictions
-            label_loc = '/home/walml/repos/zoobot_private/gz_decals_auto_posteriors.parquet'
+        # if local:
+        #     # TODO full decals predictions
+        #     label_loc = '/home/walml/repos/zoobot_private/gz_decals_auto_posteriors.parquet'
+        # else:
+        #     label_loc = 'gz_decals_auto_posteriors.parquet'
+        # switching to volunteer responses instead to not "cheat" and use ml-predicted morphology as well as ml-predicted representation
+        label_loc = '/home/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet'
+        label_cols = ['iauname', 'merging_merger_fraction', 'merging_total-votes', 'smooth-or-featured_total-votes', 'smooth-or-featured_featured-or-disk_fraction']  # includes responses
+        if label_loc.endswith('.csv'):
+            label_df = pd.read_csv(label_loc, usecols=label_cols)
         else:
-            label_loc = 'gz_decals_auto_posteriors.parquet'
-        label_cols = ['iauname', 'merging_merger_fraction', 'smooth-or-featured_featured-or-disk_fraction']  # includes responses
-    elif anomalies == 'rings':
-        if local:
-            label_loc = '/home/walml/repos/zoobot/data/ring_catalog_with_morph.csv'
-        else:
-            label_loc = 'ring_catalog_with_morph.csv'
-        label_cols = None
+            label_df = pd.read_parquet(label_loc, columns=label_cols)
+    # elif anomalies == 'rings':
+    #     raise NotImplementedError
+    #     if local:
+    #         label_loc = '/home/walml/repos/zoobot/data/ring_catalog_with_morph.csv'
+    #     else:
+    #         label_loc = 'ring_catalog_with_morph.csv'
+    #     label_cols = None
     elif (anomalies == 'odd') or (anomalies == 'ring_responses') or (anomalies == 'irregular'):
-        if local:
-            label_loc = '/home/walml/repos/zoobot_private/rare_features_dr5_with_ml_morph.parquet'
-        else:
-            label_loc = 'rare_features_dr5_with_ml_morph.parquet'
-        label_cols = None
+        # if local:
+        #     label_loc = '/home/walml/repos/zoobot_private/rare_features_dr5_with_ml_morph.parquet'
+        # else:
+        #     label_loc = 'rare_features_dr5_with_ml_morph.parquet'
+        # label_cols = None
+        # similarly, switch to vols and vol morphology
+        rare_features_dr5 = pd.read_parquet('/home/walml/repos/zoobot_private/rare_features_dr5.parquet')
+        print('rare feature classifications: {}'.format(len(rare_features_dr5)))
+        volunteers_dr5 = pd.read_parquet('/home/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet')
+        print('main volunteer classifications: {}'.format(len(volunteers_dr5)))
+        label_df = pd.merge(volunteers_dr5, rare_features_dr5, how='inner', on='iauname')
     else:
         raise ValueError(anomalies)
 
-    if label_loc.endswith('.csv'):
-        label_df = pd.read_csv(label_loc, usecols=label_cols)
-    else:
-        label_df = pd.read_parquet(label_loc, columns=label_cols)
-
     label_df['iauname'] = label_df['iauname'].astype(str)
     # label_df['objid'] = label_df['iauname']
+    print(len(label_df), 'labelled galaxies')
     return label_df
 
 
 def df_to_decals_training_data(df, anomalies, feature_cols):
+    print(len(df), 'galaxies with good features')
+
+    # filter to high-ish response
+    required_answer = 'smooth-or-featured'
     if anomalies == 'mergers':
+        required_answer = 'merging'
+    df = df[df['{}_total-votes'.format(required_answer)] >= 30]  # due to question shift, a handful have many fewer votes that total question answers would suggest
+    print(len(df), 'with enough {} answers'.format(required_answer))
+
+    if anomalies == 'mergers':
+        # filter to high-ish response
+        df = df[df['merging_total-votes'] >= 30]  # due to question shift, a handful have many fewer votes that total question answers would suggest
+        print(len(df), 'with enough merging answers')
         responses = np.around(np.array(df['merging_merger_fraction'] * 5))  # integer responses "from" UI
-        labels = np.array(df['merging_merger_fraction'] > 0.7)  # conservative scoring following astronomaly paper
-        print('WARNING temp override merger labels')
-        # labels = np.array(df['merging_merger_fraction'] > 0.2)
+        # labels = np.array(df['merging_merger_fraction'] > 0.7)  # conservative scoring following astronomaly paper
+        # print('WARNING temp override merger labels')
+        labels = np.array(df['merging_merger_fraction'] > 0.6)  # actually more like the same fraction of mergers as `odd' in the first benchmark, top 1.5%
     elif anomalies == 'featured':  # for debugging/slides only
         responses = np.around(np.array(df['smooth-or-featured_featured-or-disk_fraction'] * 5))  # integer responses "from" UI
         labels = np.array(df['merging_merger_fraction'] > 0.5)
     elif anomalies == 'rings':
-        labels = np.array(df['ring'])
-        responses = np.zeros_like(labels)
-        responses[df['smooth-or-featured_featured-or-disk_fraction'] > 0.3] += 1
-        responses[df['disk-edge-on_no_fraction'] > 0.3] += 1
-        responses[df['has-spiral-arms_no_fraction'] > 0.3] += 1
-        responses[df['ring'] == 1] = 5
+        raise NotImplementedError
+        # not yet filtered to featured only TODO
+        # labels = np.array(df['ring'])
+        # responses = np.zeros_like(labels)
+        # # increase responses by user votes
+        # responses[df['smooth-or-featured_featured-or-disk_fraction'] > 0.3] += 1
+        # responses[df['disk-edge-on_no_fraction'] > 0.3] += 1
+        # responses[df['has-spiral-arms_no_fraction'] > 0.3] += 1
+        # responses[df['ring'] == 1] = 5
     elif anomalies == 'ring_responses':
-        feat = df['smooth-or-featured_featured-or-disk_fraction'] > 0.6
-        face = df['disk-edge-on_no_fraction'] > 0.75
-        print(len(df), 'featured and face-on')
-        df = df[feat & face]
+        # df = filter_to_featured_face_on(df)
         df = df.dropna(subset=['rare-features_ring_fraction'])
         print(len(df), 'with non-nan ring fractions')
         # maybe exclude some intermediate cases?
-        labels = np.array(df['rare-features_ring_fraction'] >= 0.35)
-        responses = np.array(df['rare-features_ring_fraction'])
+        # for frac in np.linspace(0.1, 0.7, num=100):
+        #     print(frac, (df['rare-features_ring_fraction'] >= frac).mean())
+        # exit()
+        # labels = df['rare-features_ring_fraction'].values >= 0.57  # with featured/face filter
+        labels = df['rare-features_ring_fraction'].values >= 0.46  # without featured/face filter
+
+        responses = np.around(df['rare-features_ring_fraction'].values * 5)
     elif anomalies == 'irregular':
-        feat = df['smooth-or-featured_featured-or-disk_fraction'] > 0.6
-        face = df['disk-edge-on_no_fraction'] > 0.75
-        df = df[feat & face]
-        print(len(df), 'featured and face-on')
+        # df = filter_to_featured_face_on(df)
         df = df.dropna(subset=['rare-features_irregular_fraction'])
         print(len(df), 'with non-nan irregular fractions')
-        labels = np.array(df['rare-features_irregular_fraction'] >= 0.35)
-        responses = np.array(df['rare-features_irregular_fraction'])
+        # for frac in np.linspace(0.1, 0.7, num=100):
+        #     print(frac, (df['rare-features_irregular_fraction'] >= frac).mean())
+        # exit()
+        # labels = df['rare-features_irregular_fraction'].values >= 0.42  # with featured/face filter
+        labels = df['rare-features_irregular_fraction'].values >= 0.34  # without featured/face filter
+        responses = np.around(df['rare-features_irregular_fraction'].values * 5)
     else:
         raise ValueError('Anomalies {} not recognised'.format(anomalies))
 
@@ -153,7 +189,28 @@ def df_to_decals_training_data(df, anomalies, feature_cols):
 
     assert len(features) == len(labels)
     print(f'Features: {features.shape}')  # total num of galaxies will strongly affect results
+
+
+    print('Labels: \n', pd.value_counts(labels))
+    print('Responses: \n', pd.value_counts(responses))
+    print('Total galaxies: {}'.format(len(labels)))
+
+    valid_labels = np.isfinite(labels)
+    if not valid_labels.all():
+        raise ValueError('Bad labels: {}'.format((~valid_labels).sum()))
+    valid_responses = np.isfinite(responses)
+    if not valid_responses.all():
+        raise ValueError('Bad responses: {}'.format((~valid_responses).sum()))
+
     return features, labels, responses
+
+
+def filter_to_featured_face_on(df):
+    feat = df['smooth-or-featured_featured-or-disk_fraction'] > 0.6
+    face = df['disk-edge-on_no_fraction'] > 0.75
+    df = df[feat & face]
+    print(len(df), 'featured and face-on')
+    return df
 
 
 def load_gz2_data(method, anomalies, max_galaxies):

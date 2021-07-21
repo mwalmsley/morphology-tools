@@ -84,18 +84,21 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
 def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_size=10, retrain_batches=29):
 
     # max_galaxies = 1000
-    max_galaxies = 60715
     # max_galaxies = 40672  # featured, face-on, good ellipse measurement
     # 40921 in decals/cnn/irregular after cuts, 40672 with ellipses due to nans (same morph. cuts)
-    # dataset_name='decals'
-    dataset_name ='gz2'
+    # max_galaxies = 60715
+    # 58983 with good features for cnn/ellipse and 30+ total volunteer responses
+    max_galaxies = None
+
+    dataset_name='decals'
+    # dataset_name ='gz2'
 
     # method = 'ellipse'
     method = 'cnn'
 
-    # anomalies = 'mergers'
+    anomalies = 'mergers'
     # anomalies = 'featured'
-    anomalies = 'odd'
+    # anomalies = 'odd'
     # anomalies = 'rings'
     # anomalies = 'ring_responses'
     # anomalies = 'irregular'
@@ -109,14 +112,10 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
     else:
         raise ValueError(dataset_name)
 
-    print('Labels: \n', pd.value_counts(labels))
-    print('Responses: \n', pd.value_counts(responses))
-
-
     # exit()
-    if max_galaxies is not None:
-        if not len(labels) == max_galaxies:
-            logging.warning('Expected {} galaxies but only recieved {}'.format(max_galaxies, len(labels)))
+    # if max_galaxies is not None:
+    #     if not len(labels) == max_galaxies:
+    #         logging.warning('Expected {} galaxies but only recieved {}'.format(max_galaxies, len(labels)))
 
     if method == 'cnn':
         print('Applying PCA for embedding')
@@ -124,11 +123,16 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         save_embed = 'anomaly/data/latest_embed.pickle'
         new_embed = True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
         embed = shared.get_embed(features, n_components=n_components, save_variance=save_variance, save_embed=save_embed, new=new_embed)
-        logging.info('Applying zero mean unit variance transform to embed')
+        embed_nans = ~np.isfinite(embed)
+        if embed_nans.any():
+            raise ValueError('Embed has nans: {}'.format(embed_nans.sum()))
+        print('Applying zero mean unit variance transform to embed')
         # for ellipses only, StandardScalar i.e. zero mean unit variance transform as per astronomaly already applied in shared.py
         scl = StandardScaler()
         embed = scl.fit_transform(embed)
-
+        embed_nans = ~np.isfinite(embed)
+        if embed_nans.any():
+            raise ValueError('Embed has nans after scaler: {}'.format(embed_nans.sum()))
     else:
         embed = features
     del features # TODO being lazy
@@ -141,10 +145,10 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
     plt.savefig('anomaly/figures/{}/embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
     plt.close()
 
-    all_metrics = []
+    # all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
 
-        experiment_name = 'cnn_{}_kagglev3_{}'.format(anomalies, iteration_n)
+        experiment_name = 'cnn_{}_nofilter_final_{}'.format(anomalies, iteration_n)
 
         # without the reshuffle of the data and reshuffle of the starting 10, exactly the same galaxies are selected and the variation is completely gone
         # (all failed in fact)
@@ -225,18 +229,18 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
             known_labels[query_indices] = labels[query_indices]  # will be updated every batch
             preds_with_labels = np.where(~np.isnan(known_labels), known_labels.astype(float) * 100, preds)  # *100 ensures true/false labels will be numerical and way bigger if true
 
-            metrics = shared.get_metrics(preds_with_labels, labels)
+            # metrics = shared.get_metrics(preds_with_labels, labels)
     
-            # metrics['score'] = learner.estimator.score(embed, labels)  # doesn't seem to work right - should be responses not labels
-            metrics['score'] = explained_variance_score(preds, responses)
+            # # metrics['score'] = learner.estimator.score(embed, labels)  # doesn't seem to work right - should be responses not labels
+            # # metrics['score'] = explained_variance_score(preds, responses)
 
-            metrics['labelled_samples'] = total_labelled_samples
-            metrics['iteration_n'] = iteration_n
-            # print(metrics['total_labelled_samples'], metrics['accuracy_50'])
+            # metrics['labelled_samples'] = total_labelled_samples
+            # metrics['iteration_n'] = iteration_n
+            # # print(metrics['total_labelled_samples'], metrics['accuracy_50'])
 
-            metrics['total_anomalies'] = labels.sum()
+            # metrics['total_anomalies'] = labels.sum()
 
-            all_metrics.append(metrics)
+            # all_metrics.append(metrics)
 
             # print(total_labelled_samples)
             # special metrics for fig 5 in astronomaly paper
