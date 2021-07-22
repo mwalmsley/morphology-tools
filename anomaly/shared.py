@@ -70,7 +70,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
 
     # this will drop some rows in some configurations (e.g. filtering for featured only)
     # so only apply max_galaxies afterwards
-    features, labels, responses = df_to_decals_training_data(
+    features, labels, responses, df = df_to_decals_training_data(
         df,
         anomalies=anomalies,
         feature_cols=feature_cols
@@ -202,7 +202,7 @@ def df_to_decals_training_data(df, anomalies, feature_cols):
     if not valid_responses.all():
         raise ValueError('Bad responses: {}'.format((~valid_responses).sum()))
 
-    return features, labels, responses
+    return features, labels, responses, df
 
 
 def filter_to_featured_face_on(df):
@@ -218,7 +218,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
     assert anomalies == 'odd'
 
     if method == 'ellipse':
-        feature_loc = 'anomaly/data/EllipseFitFeatures_output_back_10_12.parquet'  # michelle's version, used in the paper
+        feature_loc = '/home/walml/repos/morphology-tools/anomaly/data/EllipseFitFeatures_output_back_10_12.parquet'  # michelle's version, used in the paper
         # feature_loc = 'anomaly/data/gz2_kaggle_ellipse_features.parquet'  # my version which uses the exact same example script, but is nonetheless quite different
         feature_df = pd.read_parquet(feature_loc)  # galaxy_zoo_example.py applied to full kaggle dataset
         feature_cols = feature_df.columns.values

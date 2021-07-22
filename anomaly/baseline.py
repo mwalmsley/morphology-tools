@@ -62,8 +62,8 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
     # anomalies = 'mergers'
     # anomalies = 'rings'
-    # anomalies = 'ring_responses'
-    anomalies = 'irregular'
+    anomalies = 'ring_responses'
+    # anomalies = 'irregular'
     # anomalies = 'odd'
 
     experiment_name = '{}_{}_nofilter_final_{}'.format(method, anomalies, run_n)
@@ -209,6 +209,6 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
 if __name__ == '__main__':
 
-    for run_n in range(15):
+    for run_n in range(6, 15):
         print(run_n)
         benchmark_default(run_n=run_n)
