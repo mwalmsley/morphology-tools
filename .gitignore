@@ -136,5 +136,9 @@ dmypy.json
 *.jpg
 *.zip
 *.json
+*.pdf
 
 old_checkpoints
+
+.DS_Store
+*.code-workspace
