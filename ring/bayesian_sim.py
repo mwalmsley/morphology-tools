@@ -176,9 +176,14 @@ def empirical_prob_from_histogram(values_to_query, rates, bin_edges):
 
 """Apply Bayes to convert scores to prob(ring)"""
 
-def scale_probabity_to_random_sample(scores, ring_rates, not_ring_rates, p_ring, bin_edges):
+def scale_probabity_to_random_sample_via_hists(scores, ring_rates, not_ring_rates, p_ring, bin_edges):
     p_score_given_ring = empirical_prob_from_histogram(scores, ring_rates, bin_edges)
     p_score_given_not_ring = empirical_prob_from_histogram(scores, not_ring_rates, bin_edges)
+    return scale_probability_by_bayes(p_score_given_ring, p_score_given_not_ring, p_ring)
+
+def scale_probabity_to_random_sample_via_func(scores, ring_rate_func, not_ring_rate_func, p_ring):
+    p_score_given_ring = ring_rate_func(scores)
+    p_score_given_not_ring = not_ring_rate_func(scores)
     return scale_probability_by_bayes(p_score_given_ring, p_score_given_not_ring, p_ring)
     
 def scale_probability_by_bayes(p_score_given_ring, p_score_given_not_ring, p_ring):
