@@ -39,9 +39,10 @@ def main():
 
     subject_utils.authenticate()
     project = Project(6490)  # GZ Mobile
-    df = pd.read_parquet('/Users/walml/repos/zoobot/notebooks/gz_mobile_catalog_preupload.parquet').sample(1000)
-
-    subject_set_to_upload = 'prioritised_launch_1k'
+    df = pd.read_parquet('/Users/walml/repos/zoobot/notebooks/gz_mobile_catalog_preupload.parquet')
+    # print(df['subject_set'].value_counts())
+    # exit()
+    subject_set_to_upload = 'calibration_second_3k'
 
     df_to_upload = df.query('subject_set== "{}"'.format(subject_set_to_upload))
 

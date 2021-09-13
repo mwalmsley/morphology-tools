@@ -1,38 +1,4 @@
-"""
 
-read "ring" as "expert says it's a ring"
-
-Loss function for network, p observed data given variable of interest data
-p(mobile|f(x)) / N =  p(ring) log p^hat(ring) + p(~ring) log p^hat(~ring)
-
-Normally:
-p^hat_ring = f(x), use softmax to ensure [0, 1] interval
-p(ring) = 1 if labelled ring, 0 otherwise
-
-Here, uncertain labels:
-p(ring) = p(ring|mobile votes), need to estimate. Nice separable problem (and useful in of itself).
-
-
-p(ring|mobile votes) = p(mobile votes|ring) p(ring) / [p(mobile votes|ring)p(ring) + p(mobile votes|~ring)p(~ring)]
-
-p(ring), p(~ring) are the base rates of expert labels for gz mobile galaxies
-p(mobile|ring) is the histogram of mobile responses for expert-labelled rings
-
-But these all implicity assume they were voted on by gz mobile. Explicitly:
-
-p(ring|mobile votes, voted) = p(mobile votes|ring, voted) p(ring, voted) / [p(mobile votes|ring, voted)p(ring, voted) + p(mobile votes|~ring, voted)p(~ring, voted)]
-
-Most galaxies would not be selected, so classifier trained to estimate p(ring|mobile votes, voted) would be miscalibrated
-
-Need a correction to reduce estimate according to the rate of expert rings
-
-Bayes rule to calibrate vs. base rates
-p(ring|f(x)) = p(f(x)|ring)p(ring)/ [ p(f(x)|ring)p(ring) + p(f(x)|p(~ring)) ]
-
-
-Now p(ring) and p(f(x)|p(ring)) are the histograms/rates for expert-labelled rings in random (from the selected subset) galaxies
-Potentially tedious to estimate - may need to find say 100 rings -> few thousand random galaxies, or 30 rings -> 1000 galaxies. 
-"""
 
 from collections import Counter
 
@@ -83,7 +49,7 @@ def concentrations_to_mean_prob(concentrations):
 def preds_to_sampled_vote(concentrations, num_samples=100):
 #     WHY WHY WHY is concentration0 beta and concentration1 alpha...
     beta = tfp.distributions.Beta(concentration1=concentrations[:,0], concentration0=concentrations[:, 1])
-    return beta.sample(num_samples).numpy().flatten()
+    return beta.sample(num_samples).numpy().transpose()
 
 
 """Bin scores with percentile bins. Not needed for fixed bins as easy"""
@@ -138,10 +104,10 @@ def get_percentile_ring_rates(all_preds, random_expert_ring_preds, random_expert
 
 
 # all_preds not needed
-def get_fixed_bin_ring_rates(random_expert_ring_preds, random_expert_not_ring_preds, pred_to_score_func=preds_to_sampled_vote):
+def get_fixed_bin_ring_rates(random_expert_ring_preds, random_expert_not_ring_preds, pred_to_score_func):
 #     better for sampled outputs of p, 0-1 domain enforced
-    random_expert_ring_outputs = pred_to_score_func(random_expert_ring_preds)
-    random_expert_not_ring_outputs = pred_to_score_func(random_expert_not_ring_preds)
+    random_expert_ring_outputs = pred_to_score_func(random_expert_ring_preds).flatten()
+    random_expert_not_ring_outputs = pred_to_score_func(random_expert_not_ring_preds).flatten()
     
     _, bin_edges = np.histogram(np.linspace(0., 1.), bins=30)
 #     _ = plt.hist(random_expert_ring_outputs, alpha=.5, density=True, bins=bin_edges)
@@ -177,6 +143,19 @@ def empirical_prob_from_histogram(values_to_query, rates, bin_edges):
 """Apply Bayes to convert scores to prob(ring)"""
 
 def scale_probabity_to_random_sample_via_hists(scores, ring_rates, not_ring_rates, p_ring, bin_edges):
+    """
+    
+
+    Args:
+        scores ([type]): Can be longer than num. of galaxies e.g. many samples
+        ring_rates ([type]): [description]
+        not_ring_rates ([type]): [description]
+        p_ring ([type]): [description]
+        bin_edges ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """
     p_score_given_ring = empirical_prob_from_histogram(scores, ring_rates, bin_edges)
     p_score_given_not_ring = empirical_prob_from_histogram(scores, not_ring_rates, bin_edges)
     return scale_probability_by_bayes(p_score_given_ring, p_score_given_not_ring, p_ring)
@@ -188,3 +167,10 @@ def scale_probabity_to_random_sample_via_func(scores, ring_rate_func, not_ring_r
     
 def scale_probability_by_bayes(p_score_given_ring, p_score_given_not_ring, p_ring):
     return p_score_given_ring * p_ring / (p_score_given_ring * p_ring + p_score_given_not_ring * (1-p_ring))
+
+def bayes_rule_for_many_independent_scores(scores, ring_rate_func, not_ring_rate_func, p_ring):
+    p_score_given_ring = ring_rate_func(scores) # [f(phi_0), ...]
+    p_score_given_not_ring = not_ring_rate_func(scores) # [g(phi_0), ...]
+    # print(p_score_given_ring, p_score_given_not_ring)
+    return np.product(p_score_given_ring, axis=1)*p_ring / (np.product(p_score_given_ring, axis=1)*p_ring + np.product(p_score_given_not_ring, axis=1)*(1-p_ring))
+
