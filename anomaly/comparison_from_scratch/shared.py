@@ -20,14 +20,14 @@ from sklearn.preprocessing import StandardScaler
 
 def load_decals_data(method, anomalies, max_galaxies=None):
 
-    local = os.path.isdir('/home/walml')
+    local = os.path.isdir('/Users/walml')
 
     label_df = get_decals_label_df(anomalies, local)  # no dependence on method or features
     # label_df['objid'] = label_df['iauname']
 
     if method == 'ellipse':
         # ellipse fitting to galaxies in dr5_volunteer_catalog_internal, not quite as many as auto_posteriors
-        feature_df = pd.read_parquet('/home/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
+        feature_df = pd.read_parquet('/Users/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
         feature_cols = feature_df.columns.values
         feature_df['iauname'] = feature_df.index.astype(str)
         feature_df = feature_df.reset_index(drop=True)
@@ -42,7 +42,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
 
     elif method == 'cnn':
         if local:
-            feature_loc = '/media/walml/beta1/cnn_features/decals/cnn_features_concat.parquet'
+            feature_loc = '/Volumes/beta/cnn_features/decals/cnn_features_decals.parquet'
         else:
             feature_loc = 'decals/cnn_features_concat.parquet'
         feature_df = pd.read_parquet(feature_loc)  # features and png_loc
@@ -55,7 +55,7 @@ def load_decals_data(method, anomalies, max_galaxies=None):
         # assert len(df) == len(feature_df) # TODO investigate - I think features_concat includes galaxies without quality checks
 
         # also drop the bad ellipse rows (developed in identify_gz2_galaxies.ipynb)
-        ellipse_feature_df = pd.read_parquet('/home/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
+        ellipse_feature_df = pd.read_parquet('/Users/walml/repos/morphology-tools/anomaly/data/decals_ellipse_features.parquet')  
         ellipse_feature_df['iauname'] = ellipse_feature_df.index.astype(str)
         bad_ellipse_features = ellipse_feature_df[np.any(ellipse_feature_df.isna(), axis=1)]
         bad_ellipse_galaxies = bad_ellipse_features['iauname']
@@ -95,7 +95,7 @@ def get_decals_label_df(anomalies, local):
         # else:
         #     label_loc = 'gz_decals_auto_posteriors.parquet'
         # switching to volunteer responses instead to not "cheat" and use ml-predicted morphology as well as ml-predicted representation
-        label_loc = '/home/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet'
+        label_loc = '/Users/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet'
         label_cols = ['iauname', 'merging_merger_fraction', 'merging_total-votes', 'smooth-or-featured_total-votes', 'smooth-or-featured_featured-or-disk_fraction']  # includes responses
         if label_loc.endswith('.csv'):
             label_df = pd.read_csv(label_loc, usecols=label_cols)
@@ -115,9 +115,9 @@ def get_decals_label_df(anomalies, local):
         #     label_loc = 'rare_features_dr5_with_ml_morph.parquet'
         # label_cols = None
         # similarly, switch to vols and vol morphology
-        rare_features_dr5 = pd.read_parquet('/home/walml/repos/zoobot_private/rare_features_dr5.parquet')
+        rare_features_dr5 = pd.read_parquet('/Users/walml/repos/zoobot_private/rare_features_dr5.parquet')
         print('rare feature classifications: {}'.format(len(rare_features_dr5)))
-        volunteers_dr5 = pd.read_parquet('/home/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet')
+        volunteers_dr5 = pd.read_parquet('/Users/walml/repos/zoobot_private/gz_decals_volunteers_5.parquet')
         print('main volunteer classifications: {}'.format(len(volunteers_dr5)))
         label_df = pd.merge(volunteers_dr5, rare_features_dr5, how='inner', on='iauname')
     else:
@@ -152,35 +152,27 @@ def df_to_decals_training_data(df, anomalies, feature_cols):
         labels = np.array(df['merging_merger_fraction'] > 0.5)
     elif anomalies == 'rings':
         raise NotImplementedError
-        # not yet filtered to featured only TODO
-        # labels = np.array(df['ring'])
-        # responses = np.zeros_like(labels)
-        # # increase responses by user votes
-        # responses[df['smooth-or-featured_featured-or-disk_fraction'] > 0.3] += 1
-        # responses[df['disk-edge-on_no_fraction'] > 0.3] += 1
-        # responses[df['has-spiral-arms_no_fraction'] > 0.3] += 1
-        # responses[df['ring'] == 1] = 5
     elif anomalies == 'ring_responses':
-        # df = filter_to_featured_face_on(df)
+        df = filter_to_featured_face_on(df)
         df = df.dropna(subset=['rare-features_ring_fraction'])
         print(len(df), 'with non-nan ring fractions')
         # maybe exclude some intermediate cases?
         # for frac in np.linspace(0.1, 0.7, num=100):
         #     print(frac, (df['rare-features_ring_fraction'] >= frac).mean())
         # exit()
-        # labels = df['rare-features_ring_fraction'].values >= 0.57  # with featured/face filter
-        labels = df['rare-features_ring_fraction'].values >= 0.46  # without featured/face filter
+        labels = df['rare-features_ring_fraction'].values >= 0.57  # with featured/face filter
+        # labels = df['rare-features_ring_fraction'].values >= 0.46  # without featured/face filter
 
         responses = np.around(df['rare-features_ring_fraction'].values * 5)
     elif anomalies == 'irregular':
-        # df = filter_to_featured_face_on(df)
+        df = filter_to_featured_face_on(df)
         df = df.dropna(subset=['rare-features_irregular_fraction'])
         print(len(df), 'with non-nan irregular fractions')
         # for frac in np.linspace(0.1, 0.7, num=100):
         #     print(frac, (df['rare-features_irregular_fraction'] >= frac).mean())
         # exit()
-        # labels = df['rare-features_irregular_fraction'].values >= 0.42  # with featured/face filter
-        labels = df['rare-features_irregular_fraction'].values >= 0.34  # without featured/face filter
+        labels = df['rare-features_irregular_fraction'].values >= 0.42  # with featured/face filter
+        # labels = df['rare-features_irregular_fraction'].values >= 0.34  # without featured/face filter
         responses = np.around(df['rare-features_irregular_fraction'].values * 5)
     else:
         raise ValueError('Anomalies {} not recognised'.format(anomalies))
@@ -218,7 +210,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
     assert anomalies == 'odd'
 
     if method == 'ellipse':
-        feature_loc = '/home/walml/repos/morphology-tools/anomaly/data/EllipseFitFeatures_output_back_10_12.parquet'  # michelle's version, used in the paper
+        feature_loc = '/Users/walml/repos/morphology-tools/anomaly/data/EllipseFitFeatures_output_back_10_12.parquet'  # michelle's version, used in the paper
         # feature_loc = 'anomaly/data/gz2_kaggle_ellipse_features.parquet'  # my version which uses the exact same example script, but is nonetheless quite different
         feature_df = pd.read_parquet(feature_loc)  # galaxy_zoo_example.py applied to full kaggle dataset
         feature_cols = feature_df.columns.values
@@ -229,7 +221,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
         logging.info('Non-nan features: {}'.format(len(feature_df)))
         feature_df = feature_df.reset_index(drop=True)
 
-        label_df = pd.read_csv('/media/walml/beta1/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv')  # from kaggle
+        label_df = pd.read_csv('/Volumes/beta/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv')  # from kaggle
         label_df['objid'] = label_df['GalaxyID'].astype(str)
         del label_df['GalaxyID']
 
@@ -238,7 +230,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
 
         # exclude galaxies with cnn features, based on precalculated venn diagram
         # see identify_gz2_galaxies.ipynb
-        venn_df = pd.read_csv('/home/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
+        venn_df = pd.read_csv('/Users/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
         print('Galaxies before venn diagram: ', len(df))
         df = df[df['objid'].astype(str).isin(venn_df['GalaxyID'].astype(str))]
         print('Galaxies after venn diagram: ', len(df))
@@ -249,11 +241,11 @@ def load_gz2_data(method, anomalies, max_galaxies):
 
     elif method == 'cnn':
         # cnn predictions on all gz2 galaxies
-        features = pd.read_parquet('/media/walml/beta1/cnn_features/gz2/cnn_features_concat.parquet')  # features and png_loc
+        features = pd.read_parquet('/Volumes/beta/cnn_features/gz2/cnn_features_gz2.parquet')  # features and png_loc
         features['id_str'] = features['id_str'].astype(str)
 
         catalog = pd.read_parquet(
-            '/media/walml/beta1/galaxy_zoo/gz2/subjects/image_master_catalog.parquet',
+            '/Volumes/beta/galaxy_zoo/gz2/subjects/image_master_catalog.parquet',
             columns=['dr7objid', 't06_odd_a14_yes_fraction'])  # includes responses
 
         print((catalog['t06_odd_a14_yes_fraction'] > 0.9).sum())
@@ -271,7 +263,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
         features = df[feature_cols].values  # not yet pca'd, for now - may cache instead
         
         # #  filter to 60k subset from kaggle, not just randomly
-        # kaggle_df = pd.read_csv('/media/walml/beta1/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv', usecols=['GalaxyID', 'Class6.1'])  # from kaggle
+        # kaggle_df = pd.read_csv('/Volumes/beta/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv', usecols=['GalaxyID', 'Class6.1'])  # from kaggle
         # key_df = pd.read_csv('/home/walml/Downloads/kaggle_gz_allgals_randomgalaxyid.csv', usecols=['GalaxyID', 'dr7objid'])
         # kaggle_df['GalaxyID'] = kaggle_df['GalaxyID'].astype(str)
         # key_df['GalaxyID'] = key_df['GalaxyID'].astype(str)
@@ -372,7 +364,8 @@ def get_embed(features, n_components, save_embed='', save_variance='', new=True)
                 pickle.dump(embed, f)
         # no train/test needed as unsupervised
         if len(save_variance) > 0:
-            plt.plot(embedder.explained_variance_)  # 5 would probably do?
+            plt.plot(embedder.explained_variance_ratio_)  # 5 would probably do?
+            logging.info('PCA with {} components preserves {}pc of variance'.format(n_components, embedder.explained_variance_ratio_.sum()))
             plt.savefig(save_variance)
             plt.close()
     else:

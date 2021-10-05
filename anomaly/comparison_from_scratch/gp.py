@@ -81,7 +81,7 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
 
 # TODO increasing batch size for constant fit time?
 
-def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_size=10, retrain_batches=29):
+def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, retrain_batches=29):
 
     # max_galaxies = 1000
     # max_galaxies = 40672  # featured, face-on, good ellipse measurement
@@ -119,10 +119,17 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
     if method == 'cnn':
         print('Applying PCA for embedding')
-        save_variance = 'anomaly/figures/{}/gp_pca_variation.png'.format(dataset_name)
-        save_embed = 'anomaly/data/latest_embed.pickle'
-        new_embed = True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
-        embed = shared.get_embed(features, n_components=n_components, save_variance=save_variance, save_embed=save_embed, new=new_embed)
+        save_variance = 'anomaly/comparison_from_scratch/figures/{}/gp_pca_variation.png'.format(dataset_name)
+        # save_embed = 'anomaly/data/latest_embed.pickle'
+        save_embed = ''
+        embed = shared.get_embed(
+            features,
+            n_components=n_components,
+            save_variance=save_variance,
+            save_embed=save_embed,
+            new=True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
+        )
+        exit()
         embed_nans = ~np.isfinite(embed)
         if embed_nans.any():
             raise ValueError('Embed has nans: {}'.format(embed_nans.sum()))
@@ -137,13 +144,13 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
         embed = features
     del features # TODO being lazy
 
-    embed_subset, responses_subset, labels_subset = embed[:5000], responses[:5000], labels[:5000]
-    sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(labels_subset), alpha=.3)
-    plt.savefig('anomaly/figures/{}/embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
-    plt.close()
-    sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(responses_subset), alpha=.3)
-    plt.savefig('anomaly/figures/{}/embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
-    plt.close()
+    # embed_subset, responses_subset, labels_subset = embed[:5000], responses[:5000], labels[:5000]
+    # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(labels_subset), alpha=.3)
+    # plt.savefig('anomaly/figures/{}/embed_first_2_components_labels_{}.png'.format(dataset_name, anomalies))
+    # plt.close()
+    # sns.scatterplot(x=embed_subset[:, 0], y=embed_subset[:, 1], hue=np.squeeze(responses_subset), alpha=.3)
+    # plt.savefig('anomaly/figures/{}/embed_first_2_components_responses_{}.png'.format(dataset_name, anomalies))
+    # plt.close()
 
     # all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
@@ -318,6 +325,8 @@ def benchmark_gp(n_components=10, n_iterations=10, training_size=10, retrain_siz
 
 
 if __name__ == '__main__':
+
+    logging.basicConfig(level=logging.INFO)
 
     benchmark_gp(n_iterations=15, n_components=40, retrain_batches=29, retrain_size=10)
 
