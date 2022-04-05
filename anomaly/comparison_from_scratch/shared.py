@@ -91,7 +91,7 @@ def get_decals_label_df(anomalies, local):
     if (anomalies == 'mergers') or (anomalies == 'featured'):
         # if local:
         #     # TODO full decals predictions
-        #     label_loc = '/home/walml/repos/zoobot_private/gz_decals_auto_posteriors.parquet'
+        #     label_loc = '/Users/walml/repos/zoobot_private/gz_decals_auto_posteriors.parquet'
         # else:
         #     label_loc = 'gz_decals_auto_posteriors.parquet'
         # switching to volunteer responses instead to not "cheat" and use ml-predicted morphology as well as ml-predicted representation
@@ -104,13 +104,13 @@ def get_decals_label_df(anomalies, local):
     # elif anomalies == 'rings':
     #     raise NotImplementedError
     #     if local:
-    #         label_loc = '/home/walml/repos/zoobot/data/ring_catalog_with_morph.csv'
+    #         label_loc = '/Users/walml/repos/zoobot/data/ring_catalog_with_morph.csv'
     #     else:
     #         label_loc = 'ring_catalog_with_morph.csv'
     #     label_cols = None
     elif (anomalies == 'odd') or (anomalies == 'ring_responses') or (anomalies == 'irregular'):
         # if local:
-        #     label_loc = '/home/walml/repos/zoobot_private/rare_features_dr5_with_ml_morph.parquet'
+        #     label_loc = '/Users/walml/repos/zoobot_private/rare_features_dr5_with_ml_morph.parquet'
         # else:
         #     label_loc = 'rare_features_dr5_with_ml_morph.parquet'
         # label_cols = None
@@ -264,7 +264,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
         
         # #  filter to 60k subset from kaggle, not just randomly
         # kaggle_df = pd.read_csv('/Volumes/beta/galaxy_zoo/gz2/kaggle/training_solutions_rev1.csv', usecols=['GalaxyID', 'Class6.1'])  # from kaggle
-        # key_df = pd.read_csv('/home/walml/Downloads/kaggle_gz_allgals_randomgalaxyid.csv', usecols=['GalaxyID', 'dr7objid'])
+        # key_df = pd.read_csv('/Users/walml/Downloads/kaggle_gz_allgals_randomgalaxyid.csv', usecols=['GalaxyID', 'dr7objid'])
         # kaggle_df['GalaxyID'] = kaggle_df['GalaxyID'].astype(str)
         # key_df['GalaxyID'] = key_df['GalaxyID'].astype(str)
         # key_df['dr7objid'] = key_df['dr7objid'].astype(str)
@@ -282,7 +282,7 @@ def load_gz2_data(method, anomalies, max_galaxies):
         # print('df after selecting kaggle only: ', len(df))
 
         # precalculated version that includes dropping galaxies with nan ellipse features
-        venn_df = pd.read_csv('/home/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
+        venn_df = pd.read_csv('/Users/walml/repos/morphology-tools/anomaly/data/gz2_galaxies_with_cnn_and_ellipse_features.csv')
         venn_df['dr7objid'] = venn_df['dr7objid'].astype(str)
         print('Galaxies before venn diagram: ', len(df))
         # df = df[df['id_str'].astype(str).isin(venn_df['dr7objid'].astype(str))]
@@ -291,6 +291,13 @@ def load_gz2_data(method, anomalies, max_galaxies):
         # still need to be sure to use the kaggle labels
         df['t06_odd_a14_yes_fraction_kaggle'] = df['Class6.1']
         del df['t06_odd_a14_yes_fraction'] 
+
+    elif method == 'umap':
+
+        print('Loading UMAP features')
+        print('DO NOT USE - reviewer requested this experiment, performs poorly')
+        df = pd.read_parquet('/home/walml/repos/morphology-tools/anomaly/notebooks/temp_latest_forest_df_umap_40.parquet')
+        feature_cols = ['umap_feat_{}'.format(n) for n in range(40)]
 
         # df.to_csv('temp_latest_cnn_df.csv', index=False)
 
@@ -301,9 +308,10 @@ def load_gz2_data(method, anomalies, max_galaxies):
 
     responses = np.around(np.array(df['t06_odd_a14_yes_fraction_kaggle'] * 5))  # integer responses "from" UI
     labels = np.array(df['t06_odd_a14_yes_fraction_kaggle'] > 0.9)  # conservative scoring following astronomaly paper
+    print(feature_cols)
     features = df[feature_cols].values
 
-    if method == 'ellipse':
+    if (method == 'ellipse') or (method == 'umap'):
         logging.info('Applying zero mean unit variance transform to ellipse features')
         # for ellipses only, apply sklearn StandardScalar i.e. zero mean unit variance transform as per astronomaly
         scl = StandardScaler()
@@ -516,7 +524,9 @@ def get_metrics_like_fig_5(final_sorted_labels, method, dataset_name, regression
         'regression': regression
     }
 
-    with open('anomaly/results/{}/paper_style/fig5_metrics_{}_{}.json'.format(dataset_name, regression, experiment_name), 'w') as f:
+    # I'm being lazy
+    results_dir = '/Users/walml/repos/morphology-tools/anomaly/comparison_from_scratch/results'
+    with open('{}/{}/paper_style/fig5_metrics_{}_{}.json'.format(results_dir, dataset_name, regression, experiment_name), 'w') as f:
         json.dump(fig5_metrics, f)
 
         plt.plot(fig5_metrics['top_n_galaxies'], fig5_metrics['rank_weighted_scores'], label=regression)
@@ -527,4 +537,4 @@ def get_metrics_like_fig_5(final_sorted_labels, method, dataset_name, regression
         plt.ylim([0., 1.])
         plt.tight_layout()
         plt.legend()
-        plt.savefig('anomaly/results/{}/paper_style/fig5_metrics_{}_{}.png'.format(dataset_name, regression, experiment_name))
+        plt.savefig('{}/{}/paper_style/fig5_metrics_{}_{}.png'.format(results_dir, dataset_name, regression, experiment_name))

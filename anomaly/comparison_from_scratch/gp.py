@@ -83,6 +83,8 @@ def max_value_query_strategy(modal_learner, X, n_instances=1):
 
 def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, retrain_batches=29):
 
+    results_dir = '/home/walml/repos/morphology-tools/anomaly/comparison_from_scratch/results'
+
     # max_galaxies = 1000
     # max_galaxies = 40672  # featured, face-on, good ellipse measurement
     # 40921 in decals/cnn/irregular after cuts, 40672 with ellipses due to nans (same morph. cuts)
@@ -90,15 +92,16 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
     # 58983 with good features for cnn/ellipse and 30+ total volunteer responses
     max_galaxies = None
 
-    dataset_name='decals'
-    # dataset_name ='gz2'
+    # dataset_name='decals'
+    dataset_name ='gz2'
 
     # method = 'ellipse'
     method = 'cnn'
+    # method = 'umap'  # DO NOT USE - reviewer requested this experiment, performs poorly
 
-    anomalies = 'mergers'
+    anomalies = 'odd'
+    # anomalies = 'mergers'
     # anomalies = 'featured'
-    # anomalies = 'odd'
     # anomalies = 'rings'
     # anomalies = 'ring_responses'
     # anomalies = 'irregular'
@@ -119,8 +122,9 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
 
     if method == 'cnn':
         print('Applying PCA for embedding')
-        save_variance = 'anomaly/comparison_from_scratch/figures/{}/gp_pca_variation.png'.format(dataset_name)
+        # save_variance = '{}/anomaly/comparison_from_scratch/figures/{}/gp_pca_variation.png'.format(results_dir, dataset_name)
         # save_embed = 'anomaly/data/latest_embed.pickle'
+        save_variance = ''
         save_embed = ''
         embed = shared.get_embed(
             features,
@@ -129,7 +133,7 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
             save_embed=save_embed,
             new=True  # may actually need to be true, due to shuffling galaxies - embed won't match up naively
         )
-        exit()
+
         embed_nans = ~np.isfinite(embed)
         if embed_nans.any():
             raise ValueError('Embed has nans: {}'.format(embed_nans.sum()))
@@ -155,7 +159,7 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
     # all_metrics = []
     for iteration_n in tqdm.tqdm(np.arange(n_iterations)):
 
-        experiment_name = 'cnn_{}_nofilter_final_{}'.format(anomalies, iteration_n)
+        experiment_name = '{}_feedback_{}'.format(anomalies, iteration_n)
 
         # without the reshuffle of the data and reshuffle of the starting 10, exactly the same galaxies are selected and the variation is completely gone
         # (all failed in fact)
@@ -257,7 +261,7 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
                 print('Calculating fig 5 metrics')
                 sorted_labels = labels[np.argsort(preds_with_labels)][::-1]
 
-                shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
+                # shared.get_metrics_like_fig_5(sorted_labels, method, dataset_name, 'gp', experiment_name)
 
                 predictions_record = {
                     'preds_gp_only': preds.astype(float).tolist(),
@@ -267,7 +271,7 @@ def benchmark_gp(n_components, n_iterations, retrain_size,  training_size=10, re
                     'acquired_features': np.array(acquired_samples).tolist(),
                     'acquired_labels': np.array(acquired_labels).tolist()
                 }
-                with open('anomaly/results/{}/predictions_gp_{}_{}.json'.format(dataset_name, method, experiment_name), 'w') as f:
+                with open('{}/{}/predictions_gp_{}_{}.json'.format(results_dir, dataset_name, method, experiment_name), 'w') as f:
                     json.dump(predictions_record, f)
 
                 # df_loc = 'anomaly/results/{}/gp_metrics_{}_{}.csv'.format(dataset_name, method, experiment_name)

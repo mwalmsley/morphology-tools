@@ -54,19 +54,20 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
     # max_galaxies = 40672
     max_galaxies = None
 
-    # dataset_name = 'gz2'
-    dataset_name = 'decals'
+    dataset_name = 'gz2'
+    # dataset_name = 'decals'
 
-    method = 'ellipse'
-    # method = 'cnn'
+    # method = 'ellipse'
+    method = 'cnn'
 
     # anomalies = 'mergers'
     # anomalies = 'rings'
-    anomalies = 'ring_responses'
+    # anomalies = 'ring_responses'
     # anomalies = 'irregular'
-    # anomalies = 'odd'
+    anomalies = 'odd'
 
-    experiment_name = '{}_{}_nofilter_final_{}'.format(method, anomalies, run_n)
+    results_dir = '/Users/walml/repos/morphology-tools/anomaly/comparison_from_scratch/results'
+    experiment_name = '{}_{}_feedback_{}'.format(method, anomalies, run_n)
 
     if dataset_name == 'gz2':
         features, labels, responses, metadata = shared.load_gz2_data(method=method, anomalies=anomalies, max_galaxies=max_galaxies)
@@ -84,13 +85,13 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
     if max_galaxies is not None:
         if not len(labels) == max_galaxies:
-            logging.warning('Expected {} galaxies but only recieved {}'.format(max_galaxies, len(labels)))
+            logging.warning('Expected {} galaxies but recieved {}'.format(max_galaxies, len(labels)))
 
+    #  optionally compress first with PCA
     # always use embed with cnn, 1000 features is silly - probably?
     if method == 'cnn':
         print('Applying PCA for embedding')
-        raise NotImplementedError
-        # features = shared.get_embed(features, n_components=10, save='')  # optionally compress first with PCA
+        features = shared.get_embed(features, n_components=10, new=True)  #
 
 
     if dataset_name == 'simulated':
@@ -180,7 +181,7 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
                 'acquired_features': np.array(regressor_X).tolist(),
                 'acquired_labels': np.array(regressor_y).tolist()
             }
-            with open('anomaly/results/{}/predictions_forest_{}_{}.json'.format(dataset_name, method, experiment_name), 'w') as f:
+            with open('{}/{}/predictions_forest_{}_{}.json'.format(results_dir, dataset_name, method, experiment_name), 'w') as f:
                 json.dump(predictions_record, f)
 
 
@@ -209,6 +210,8 @@ def benchmark_default(retrain_size=10, retrain_batches=22, run_n=None):
 
 if __name__ == '__main__':
 
-    for run_n in range(6, 15):
+    # for run_n in range(6, 15):
+    # for run_n in range(1):
+    for run_n in range(15):
         print(run_n)
         benchmark_default(run_n=run_n)
